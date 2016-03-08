@@ -270,28 +270,49 @@ def activequery(contents, filepath = ""):
      * findByPk()
      * findByAttributes()
      * findAllByAttributes()
+     
+    Note that the code below is messy and should get a clean up
     """
-    #if contents.find("::model()") == -1:
-    #    return contents
+    if contents.find("::model()") == -1:
+        return contents
 
     if filepath:
         print("Processing ActiveQueries in " + filepath)
     
     contents_copy = contents
     
-    def find_matching(contents, begin, open, close):
+    def find_matching(text, begin, open, close):
         brackets = 1
         pos = begin
         while brackets > 0:
-            if contents[pos] == open:
+            if text[pos] == open:
                 brackets += 1
-            elif contents[pos] == close:
+            elif text[pos] == close:
                 brackets -= 1
             pos += 1
-            if pos == len(contents):
-                print("Error: Couldn't match parentheses. Using workaround.")
+            if pos == len(text):
+                print("Error: Couldn't match parentheses.")
                 return -1
         return pos
+
+    def split_into_matching(text, open, close, separator):
+        brackets = 0
+        old_pos = 0
+        pos = 0
+        while pos < len(text):
+            if text[pos] == open:
+                brackets += 1
+            elif text[pos] == close:
+                brackets -= 1
+            if brackets == 0 and text[pos] == separator:
+                yield text[old_pos:pos]
+                old_pos = pos + 1
+            pos += 1
+        if brackets != 0:
+            print("Error: Couldn't match parentheses to find separator.")
+            yield ""
+        else:
+            yield text[old_pos:pos].strip()
 
     activequeries = [("::find()->findByPk(",            "::findOne("),
                      ("::find()->findByAttributes(",    "::findOne("),
@@ -302,22 +323,46 @@ def activequery(contents, filepath = ""):
     contents = contents.replace("::find()->findAll()", "::find()->all()")
     
     for (expression, replacement_expression) in activequeries:
-        begin = contents.find(expression)
-        while begin != -1:
+        while contents.find(expression) != -1:
+            begin = contents.find(expression)
             end = find_matching(contents, begin + len(expression), '(', ')')
-            if end == -1: # Error in find_matching -> try simple replace
+            
+            # Catch error in find_matching -> try simple replace
+            if end == -1: 
                 old = contents[begin:begin+len(expression)]
                 new = replacement_expression
-            else:
-                old = contents[begin:end]
-                new = replacement_expression + contents[begin + len(expression):end]
+                print("Using workaround: Replaced " + old + " with " + new + "\n")
+                contents = contents.replace(old, new)
+                continue
             
-            print("Replaced " + old + " with " + new)
+            old = contents[begin:end]
+            
+            parameters = contents[begin + len(expression):end-1].strip()
+            if "Attributes" in expression:
+                parameters = list(split_into_matching(parameters, '[', ']', ','))
+                if len(parameters) == 1:
+                    new = replacement_expression + parameters[0] + ')'
+                elif len(parameters) == 2: # With orderby clause
+                    replacement_expression = "::find()->all(" if "findAll" in replacement_expression else "::find()->one("
+                    matches = re.search(r"\[['\"]order['\"] => ['\"](\w+)(?: (\w+))?['\"]\]", parameters[1])
+                    if not matches:
+                        print("Fatal: Can't replace because second parameter doesnt match order by style")
+                        print("Skipping this file")
+                        return contents_copy
+                    matches = list(matches.groups())
+                    matches[1] = matches[1] if matches[1] != None else "ASC"
+                    new = replacement_expression + parameters[0] + ")->orderBy(['{}' => SORT_{}])".format(*matches)
+                else:
+                    print("Fatal: Too many parameters")
+                    print("Skipping this file")
+                    return contents_copy
+            else:
+                new = replacement_expression + parameters + ')'
+            
+            print("Replaced " + old + "\nwith " + new + "\n")
             contents = contents.replace(old, new)
-
-            begin = contents.find(expression)
     
-    return contents_copy
+    return contents
 
 def do_replace(contents, yii1_classes, replacements, filepath):
     """
