@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 This is a script to help converting a yii1 project into a yii2 project
 """
@@ -364,7 +365,7 @@ def activequery(contents, filepath = ""):
     
     return contents
 
-def do_replace(contents, yii1_classes, replacements, filepath):
+def replace(contents, yii1_classes, replacements, filepath = ""):
     """
     Applies the replacements named in `replacements` in the the file `filepath`
     """
@@ -479,7 +480,7 @@ def main():
         for filepath in get_all_files(paths):
             with open_wrapper(filepath, 'r') as file:
                 contents = file.read()
-            contents = do_replace(contents, yii1_classes, args.replace, filepath)
+            contents = replace(contents, yii1_classes, args.replace, filepath)
             with open_wrapper(filepath, 'w') as file:
                 file.write(contents)
             
