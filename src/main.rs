@@ -36,13 +36,28 @@ fn read_schema_test() {
     assert_eq!(schema.len(), 8);
 }
 
-fn parse_object(object: &mut json::JsonValue, urls: &mut Vec<String>) {
+fn parse_single_object(object: &mut json::JsonValue, urls: &mut Vec<String>) {
     for (_, value) in object.entries_mut() {
         if let Some(x) = value.take_string() {
             if x.starts_with(ENTRYPOINT) && !urls.contains(&x) {
                 urls.push(x);
             }
         }
+    }
+}
+
+fn parse_response_json(json: &mut json::JsonValue, urls: &mut Vec<String>) {
+    if json.entries().any(|(key, _)| key == "id") {
+        parse_single_object(json, urls);
+    } else if json.entries().any(|(key, _)| key == "data") {
+        for mut object in json["data"].members_mut() {
+            parse_single_object(&mut object, urls);
+        }
+        if let Some(next) = json["links"]["next"].take_string() {
+            urls.push(next);
+        }
+    } else {
+        println!(" --- Returned JSON is invalid --- ");
     }
 }
 
@@ -85,17 +100,6 @@ fn main() {
             }
         }
 
-        if json.entries().any(|(key, _)| key == "id") {
-            parse_object(&mut json, &mut urls);
-        } else if json.entries().any(|(key, _)| key == "data") {
-            for mut object in json["data"].members_mut() {
-                parse_object(&mut object, &mut urls);
-            }
-            if let Some(next) = json["links"]["next"].take_string() {
-                urls.push(next);
-            }
-        } else {
-            println!(" --- Invalid Response: {} --- ", response.url);
-        }
+        parse_response_json(&mut json, &mut urls);
     }
 }
