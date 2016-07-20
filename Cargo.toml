@@ -1,0 +1,8 @@
+[package]
+name = "crawler"
+version = "0.1.0"
+authors = ["konstin <konstin@mailbox.org>"]
+
+[dependencies]
+json = "0.9.1"
+hyper = "0.9.9"
