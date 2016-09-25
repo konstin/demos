@@ -22,13 +22,15 @@ use std::sync::{Arc, Mutex};
 const ENTRYPOINT: &'static str = "http://ratsinformant.local/oparl/v1.0";
 //const ENTRYPOINT: &'static str = "https://www.muenchen-transparent.de/oparl/v1.0";
 const SCHEMA_DIR: &'static str = "schema";
+const LIMIT: usize = 1000;
 
 
-/*fn check_oparl_object(schema: &json::JsonValue, object: &json::JsonValue) -> Result<(), String> {
-    let oparltype_regex = regex::Regex::new(r"^https://schema\.oparl\.org/1\.0/([:alpha:]+)$").unwrap();
+fn check_oparl_object(schema: &json::JsonValue, object: &json::JsonValue) -> Result<(), String> {
+    //let oparltype_regex = regex::Regex::new(r"^https://schema\.oparl\.org/1\.0/([:alpha:]+)$").unwrap();
     let oparltype = object["type"].as_str().unwrap();
-    let typename = oparltype_regex.captures(oparltype).and_then(|x| x.at(1))
-                   .ok_or(format!("The type attribute of the object is not valid: {}", oparltype))?;
+    let typename = &oparltype[29..];
+    //let typename = oparltype_regex.captures(oparltype).and_then(|x| x.at(1))
+    //               .ok_or(format!("The type attribute of the object is not valid: {}", oparltype))?;
     let object_schema = &schema["typename"];
     for requirement in object_schema["required"].members().map(|i| i.as_str().unwrap()) {
         if !object.has_key(requirement) {
@@ -38,7 +40,7 @@ const SCHEMA_DIR: &'static str = "schema";
         }
     }
     Ok(())
-}*/
+}
 
 fn read_schema(dir: &str) -> Result<json::JsonValue, String> {
     let mut schema = json::JsonValue::new_object();
@@ -66,10 +68,10 @@ fn read_schema_test() {
 }
 
 fn parse_single_object(schema: &json::JsonValue, object: &mut json::JsonValue, urls: &Arc<Mutex<Vec<String>>>) {
-    //check_oparl_object(schema, object);
-    let mut urls2 = urls.lock().unwrap();
+    check_oparl_object(schema, object).unwrap();
     for (_, value) in object.entries_mut() {
         if let Some(link) = value.take_string() {
+            let mut urls2 = urls.lock().unwrap();
             if link.starts_with(ENTRYPOINT) && !urls2.contains(&link) {
                 urls2.push(link);
             }
@@ -103,7 +105,6 @@ fn load_url_cached(client: &Client, url: &String) -> Result<String, String>{
     if let Ok(mut file) = File::open(path) {
         let mut buffer = String::new();
         file.read_to_string(&mut buffer).unwrap();
-        println!("Loaded from cache");
         return Ok(buffer);
     }
 
@@ -131,25 +132,25 @@ fn crawl(shared_iterator: Arc<Mutex<usize>>, urls: Arc<Mutex<Vec<String>>>, sche
     let client = Client::new();
 
     loop {
+        let time_a = PreciseTime::now();
+
         let my_url;
         {
             let urls_locked = urls.lock().unwrap();
             let mut iterator_locked = shared_iterator.lock().unwrap();
-            println!("{}", *iterator_locked);
-            if *iterator_locked >= urls_locked.len() || urls_locked.len() >= 500 {
+            if *iterator_locked >= urls_locked.len() || *iterator_locked >= LIMIT {
                 break
             }
             my_url = urls_locked[*iterator_locked].to_owned();
             *iterator_locked += 1;
         }
 
-        println! ("{}", &my_url);
 
-        let time_a = PreciseTime::now();
         let json_string = match load_url_cached(&client, &my_url) {
             Ok(ok) => ok,
             Err(err) => {
                 println! ("{}", err);
+                panic!();
                 continue
             }
         };
@@ -166,13 +167,15 @@ fn crawl(shared_iterator: Arc<Mutex<usize>>, urls: Arc<Mutex<Vec<String>>>, sche
         parse_response_json(&schema, &mut json, &urls);
 
         let time_c = PreciseTime::now();
-        println! ("{} and {}", time_a.to(time_b).num_milliseconds(), time_b.to(time_c).num_milliseconds());
+        println! ("{}", &my_url);
+        println! ("{} and {}", time_a.to(time_b).num_microseconds().unwrap(), time_b.to(time_c).num_microseconds().unwrap());
     }
+
+    let mut iterator_locked = shared_iterator.lock().unwrap();
+    println!("{}", *iterator_locked);
 }
 
 fn main() {
-    let start = PreciseTime::now();
-
     let schema = match read_schema(SCHEMA_DIR) {
         Ok(ok) => ok,
         Err(err) => {
@@ -182,7 +185,8 @@ fn main() {
         }
     };
     println!("{} schema files loaded", schema.len());
-    println!("{} milliseconds", start.to(PreciseTime::now()).num_milliseconds());
+
+    let start = PreciseTime::now();
 
     let entrypoint = String::from(ENTRYPOINT);
     let urls = Arc::new(Mutex::new(vec![entrypoint]));
