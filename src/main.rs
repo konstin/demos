@@ -10,12 +10,13 @@ extern crate url;
 
 use hyper::Client;
 use time::PreciseTime;
+use url::Url;
 
 use std::fs::{File, read_dir, create_dir_all};
 use std::io::prelude::*;
-use url::Url;
 use std::str::FromStr;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 //const ENTRYPOINT: &'static str = "http://localhost:8080/oparl/v1.0";
 const ENTRYPOINT: &'static str = "http://ratsinformant.local/oparl/v1.0";
@@ -64,18 +65,19 @@ fn read_schema_test() {
     assert_eq!(schema.len(), 12);
 }
 
-fn parse_single_object(schema: &json::JsonValue, object: &mut json::JsonValue, urls: &mut Vec<String>) {
+fn parse_single_object(schema: &json::JsonValue, object: &mut json::JsonValue, urls: &Arc<Mutex<Vec<String>>>) {
     //check_oparl_object(schema, object);
+    let mut urls2 = urls.lock().unwrap();
     for (_, value) in object.entries_mut() {
-        if let Some(x) = value.take_string() {
-            if x.starts_with(ENTRYPOINT) && !urls.contains(&x) {
-                urls.push(x);
+        if let Some(link) = value.take_string() {
+            if link.starts_with(ENTRYPOINT) && !urls2.contains(&link) {
+                urls2.push(link);
             }
         }
     }
 }
 
-fn parse_response_json(schema: &json::JsonValue, json: &mut json::JsonValue, urls: &mut Vec<String>) {
+fn parse_response_json(schema: &json::JsonValue, json: &mut json::JsonValue, urls: &Arc<Mutex<Vec<String>>>) {
     if json.has_key("id") {
         parse_single_object(schema, json, urls);
     } else if json.has_key("data") {
@@ -83,7 +85,10 @@ fn parse_response_json(schema: &json::JsonValue, json: &mut json::JsonValue, url
             parse_single_object(schema, &mut object, urls);
         }
         if let Some(next) = json["links"]["next"].take_string() {
-            urls.push(next);
+            let mut urls = urls.lock().unwrap();
+            if next.starts_with(ENTRYPOINT) && !urls.contains(&next) {
+                urls.push(next);
+            }
         }
     } else {
         println!(" --- Returned JSON is invalid --- ");
@@ -122,23 +127,29 @@ fn load_url_cached(client: &Client, url: &String) -> Result<String, String>{
     Ok(json_string)
 }
 
-fn crawl(shared_iterator: &mut usize, urls: &mut Vec<String>, schema: &json::JsonValue) {
+fn crawl(shared_iterator: Arc<Mutex<usize>>, urls: Arc<Mutex<Vec<String>>>, schema: &json::JsonValue) {
     let client = Client::new();
 
     loop {
-        if *shared_iterator >= urls.len() || *shared_iterator > 500 {
-            break
+        let my_url;
+        {
+            let urls_locked = urls.lock().unwrap();
+            let mut iterator_locked = shared_iterator.lock().unwrap();
+            println!("{}", *iterator_locked);
+            if *iterator_locked >= urls_locked.len() || urls_locked.len() >= 500 {
+                break
+            }
+            my_url = urls_locked[*iterator_locked].to_owned();
+            *iterator_locked += 1;
         }
-        let my_url = urls[*shared_iterator].to_owned();
-        *shared_iterator += 1;
 
-        println!("{}", &my_url);
+        println! ("{}", &my_url);
 
         let time_a = PreciseTime::now();
         let json_string = match load_url_cached(&client, &my_url) {
             Ok(ok) => ok,
             Err(err) => {
-                println!("{}", err);
+                println! ("{}", err);
                 continue
             }
         };
@@ -147,15 +158,15 @@ fn crawl(shared_iterator: &mut usize, urls: &mut Vec<String>, schema: &json::Jso
         let mut json = match json::parse(json_string.as_str()) {
             Ok(ok) => ok,
             Err(err) => {
-                println!("Invalid JSON: {}", err);
+                println! ("Invalid JSON: {}", err);
                 continue;
             }
         };
 
-        parse_response_json(&schema, &mut json, urls);
+        parse_response_json(&schema, &mut json, &urls);
 
         let time_c = PreciseTime::now();
-        println!("{} and {}", time_a.to(time_b).num_milliseconds(), time_b.to(time_c).num_milliseconds());
+        println! ("{} and {}", time_a.to(time_b).num_milliseconds(), time_b.to(time_c).num_milliseconds());
     }
 }
 
@@ -174,12 +185,12 @@ fn main() {
     println!("{} milliseconds", start.to(PreciseTime::now()).num_milliseconds());
 
     let entrypoint = String::from(ENTRYPOINT);
-    let mut urls: Vec<String> = vec![entrypoint];
-    let mut iterator = 0;
+    let urls = Arc::new(Mutex::new(vec![entrypoint]));
+    let iterator = Arc::new(Mutex::new(0));
 
-    crawl(&mut iterator, &mut urls, &schema);
+    crawl(iterator, urls, &schema);
 
-    println!("TOTAL: {} ", start.to(PreciseTime::now()).num_milliseconds());
+    println!("TOTAL: {} milliseconds", start.to(PreciseTime::now()).num_milliseconds());
 }
 
 
