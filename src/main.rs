@@ -16,13 +16,14 @@ use std::fs::{File, read_dir, create_dir_all};
 use std::io::prelude::*;
 use std::str::FromStr;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Condvar};
+use std::thread;
 
 //const ENTRYPOINT: &'static str = "http://localhost:8080/oparl/v1.0";
 const ENTRYPOINT: &'static str = "http://ratsinformant.local/oparl/v1.0";
 //const ENTRYPOINT: &'static str = "https://www.muenchen-transparent.de/oparl/v1.0";
 const SCHEMA_DIR: &'static str = "schema";
-const LIMIT: usize = 1000;
+const LIMIT: usize = 500;
 
 
 fn check_oparl_object(schema: &json::JsonValue, object: &json::JsonValue) -> Result<(), String> {
@@ -102,11 +103,11 @@ fn load_url_cached(client: &Client, url: &String) -> Result<String, String>{
     let y = "cache/".to_string() + x.host_str().unwrap() + x.path() + ".json";
     let path = Path::new(&y);
 
-    if let Ok(mut file) = File::open(path) {
+    /*if let Ok(mut file) = File::open(path) {
         let mut buffer = String::new();
         file.read_to_string(&mut buffer).unwrap();
         return Ok(buffer);
-    }
+    }*/
 
     let mut response = match client.get(url).send() {
         Ok(ok) => ok,
@@ -120,71 +121,80 @@ fn load_url_cached(client: &Client, url: &String) -> Result<String, String>{
     let mut json_string = String::new();
     response.read_to_string(&mut json_string).unwrap(); // Can this fail?
 
-    create_dir_all(path.parent().unwrap()).unwrap();
+    /*create_dir_all(path.parent().unwrap()).unwrap();
     let mut file = File::create(path).unwrap();
     file.write_all(json_string.as_bytes()).unwrap();
-    println!("Written to cache");
+    println!("Written to cache");*/
 
     Ok(json_string)
 }
 
-fn crawl(shared_iterator: Arc<Mutex<usize>>, urls: Arc<Mutex<Vec<String>>>, schema: &json::JsonValue) {
+fn parse_one_url(my_url: &String, urls: &Arc<Mutex<Vec<String>>>, schema: &json::JsonValue, client: &Client) -> PreciseTime {
+    let json_string = match load_url_cached(&client, &my_url) {
+        Ok(ok) => ok,
+        Err(err) => {
+            println! ("{}", err);
+            panic!();
+        }
+    };
+    let time_b = PreciseTime::now();
+
+    let mut json = match json::parse(json_string.as_str()) {
+        Ok(ok) => ok,
+        Err(err) => {
+            println! ("Invalid JSON: {}", err);
+            panic!();
+        }
+    };
+
+    parse_response_json(&schema, &mut json, &urls);
+    time_b
+}
+
+fn crawl(shared_iterator: Arc<Mutex<usize>>, urls: Arc<Mutex<Vec<String>>>, id: usize, pair: Arc<(Mutex<usize>, Condvar)>, threadcount: usize) {
+    let schema = read_schema(SCHEMA_DIR).unwrap();
+
     let client = Client::new();
 
+    let &(ref lock, ref cvar) = &*pair;
+
     loop {
-        let time_a = PreciseTime::now();
+        //let time_a = PreciseTime::now();
 
         let my_url;
-        {
-            let urls_locked = urls.lock().unwrap();
-            let mut iterator_locked = shared_iterator.lock().unwrap();
-            if *iterator_locked >= urls_locked.len() || *iterator_locked >= LIMIT {
-                break
+        loop {
+            {
+                let urls_locked = urls.lock().unwrap();
+                let mut iterator_locked = shared_iterator.lock().unwrap();
+                if *iterator_locked < urls_locked.len() && *iterator_locked < LIMIT {
+                    my_url = urls_locked[*iterator_locked].to_owned();
+                    *iterator_locked += 1;
+                    break
+                }
             }
-            my_url = urls_locked[*iterator_locked].to_owned();
-            *iterator_locked += 1;
+            let mut stalled_counter = lock.lock().unwrap();
+            *stalled_counter += 1;
+            if *stalled_counter == threadcount {
+                // All threads are waiting, so we're done
+                println!("DONE: {}", id);
+                cvar.notify_all();
+                return;
+            }
+            println!("COUNT: {} (id: {})", *stalled_counter, id);
+            stalled_counter = cvar.wait(stalled_counter).unwrap();
+            *stalled_counter -= 1;
         }
 
+        println!("{}: {}", id, &my_url);
+        let time_b = parse_one_url(&my_url, &urls, &schema, &client);
+        cvar.notify_all();
 
-        let json_string = match load_url_cached(&client, &my_url) {
-            Ok(ok) => ok,
-            Err(err) => {
-                println! ("{}", err);
-                panic!();
-                continue
-            }
-        };
-        let time_b = PreciseTime::now();
-
-        let mut json = match json::parse(json_string.as_str()) {
-            Ok(ok) => ok,
-            Err(err) => {
-                println! ("Invalid JSON: {}", err);
-                continue;
-            }
-        };
-
-        parse_response_json(&schema, &mut json, &urls);
-
-        let time_c = PreciseTime::now();
-        println! ("{}", &my_url);
-        println! ("{} and {}", time_a.to(time_b).num_microseconds().unwrap(), time_b.to(time_c).num_microseconds().unwrap());
+        //let time_c = PreciseTime::now();
+        //println! ("{} and {}", time_a.to(time_b).num_microseconds().unwrap(), time_b.to(time_c).num_microseconds().unwrap());
     }
-
-    let mut iterator_locked = shared_iterator.lock().unwrap();
-    println!("{}", *iterator_locked);
 }
 
 fn main() {
-    let schema = match read_schema(SCHEMA_DIR) {
-        Ok(ok) => ok,
-        Err(err) => {
-            println!("Failed to load the schema files");
-            println!("Reason: {}", err);
-            std::process::exit(1);
-        }
-    };
-    println!("{} schema files loaded", schema.len());
 
     let start = PreciseTime::now();
 
@@ -192,9 +202,20 @@ fn main() {
     let urls = Arc::new(Mutex::new(vec![entrypoint]));
     let iterator = Arc::new(Mutex::new(0));
 
-    crawl(iterator, urls, &schema);
+    let pair = Arc::new((Mutex::new(0), Condvar::new()));
+
+    let mut threads = Vec::new();
+    let threadcount = 4;
+    for id in 0..threadcount {
+        let iterator = iterator.clone();
+        let urls = urls.clone();
+        let pair = pair.clone();
+        let handle = thread::spawn(move || {
+            crawl(iterator, urls, id, pair, threadcount);
+        });
+        threads.push(handle);
+    }
+    threads.into_iter().map(|i| i.join()).collect::<Vec<_>>();
 
     println!("TOTAL: {} milliseconds", start.to(PreciseTime::now()).num_milliseconds());
 }
-
-
