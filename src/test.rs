@@ -1,9 +1,6 @@
 use chrono::*;
-use json;
-use hyper::Url;
 
 use std::path::Path;
-use std::str::FromStr;
 
 #[test]
 fn test_parse_object() {
@@ -62,18 +59,15 @@ fn test_external_list_iterator() {
     assert_eq!(ids, expected_ids);
 }
 
+fn test_single_url_to_path(url: &str, path: &str) {
+    assert_eq! (super::url_to_path(url), Path::new(path));
+    assert_eq! (super::url_to_path(&(url.to_string() + "/")), Path::new(path));
+}
+
 #[test]
 fn test_url_to_path() {
-    let data = vec![
-        ("https://example.tld:8080/oparl/v1.0/paper/1", "/home/konsti/cache-rust/https:example.tld:8080/oparl/v1.0/paper/1.json"),
-        ("https://example.tld/oparl/v1.0/paper/1", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0/paper/1.json"),
-        ("https://example.tld", "/home/konsti/cache-rust/https:example.tld.json"),
-    ];
-
-    for (url, path) in data {
-        assert_eq! (super::url_to_path(url), Path::new(path));
-        assert_eq! (super::url_to_path(&(url.to_string() + "/")), Path::new(path));
-    }
-
-    // let x = "http://localhost:8080/oparl/v1.0/body/0/list/paper?id=3&modified_until=2016-05-03T00%3A00%3A00%2B02%3A00&asd=asx";
+    test_single_url_to_path("https://example.tld:8080/oparl/v1.0/paper/1", "/home/konsti/cache-rust/https:example.tld:8080/oparl/v1.0/paper/1.json");
+    test_single_url_to_path("https://example.tld/oparl/v1.0/paper/1", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0/paper/1.json");
+    test_single_url_to_path("https://example.tld", "/home/konsti/cache-rust/https:example.tld.json");
+    test_single_url_to_path("https://example.tld/api?modified_until=2016-05-03T00%3A00%3A00%2B02%3A00", "/home/konsti/cache-rust/https:example.tld/api.json");
 }

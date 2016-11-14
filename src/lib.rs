@@ -5,7 +5,7 @@ extern crate chrono;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::fs::File;
+use std::fs::{File, create_dir_all};
 
 use chrono::*;
 use json::JsonValue;
@@ -92,28 +92,45 @@ pub fn url_to_path(url: &str) -> PathBuf {
         .filter(|&(ref x, _)| x != "created_since")
         .filter(|&(ref x, _)| x != "created_until");
 
-    let url = url.query_pairs_mut()
+    let url: &mut Url = url.query_pairs_mut()
         .clear()
         .extend_pairs(query_without_filters)
         .finish();
 
-    // Prepare parts
-    let port: String = url.port().map_or("".to_string(), |port| ":".to_string() + &port.to_string());
+    // Compute the path
+    // Folder
+    let mut cachefile = cachefolder.to_string();
+    // Schema and host
+    cachefile += url.scheme();
+
+    // Host
+    if let Some(host) = url.host_str() {
+            cachefile += ":";
+            cachefile += host;
+    }
+
+    // Port
+    if let Some(port) = url.port() {
+            cachefile += ":";
+            cachefile += &port.to_string();
+    }
+
+    // Path
     let mut path = url.path().to_string();
     if path.ends_with("/") {
-        path.pop();
+        path.pop(); // We have a file here, not a folder, dear url creators
     };
-
-    // Get path
-    let mut cachefile = cachefolder.to_string() + url.scheme() + ":" + url.host_str().unwrap_or("");
-    cachefile += &port;
     cachefile += &path;
-    if let Some(q) = url.query() {
-        if q != "" {
+
+    // Query
+    if let Some(query) = url.query() {
+        if query != "" {
             cachefile += "?";
-            cachefile += q;
+            cachefile += query;
         }
     }
+
+    // File extension
     cachefile += ".json";
 
     Path::new(&cachefile).to_path_buf()
@@ -121,26 +138,26 @@ pub fn url_to_path(url: &str) -> PathBuf {
 
 fn write_to_cache(url: &str, object: &JsonValue) {
     let filepath = url_to_path(url);
-    println!("Writen to Cache:");
-    println!("  Path: {}", filepath.display());
-    println!("  Object-id: {}", object["id"]);
+    println!("Writen to Cache: {}", filepath.display());
 
-    let file = File::open(filepath);
+    create_dir_all(filepath.parent().unwrap()).unwrap();
+    let mut file: File = File::create(filepath).unwrap();
+
+    object.write_pretty(&mut file, 4).unwrap();
 }
 
 fn parse_entry(key: String, entry: &mut JsonValue, entry_def: &JsonValue) {
     let external_lists: Vec<JsonValue> = Vec::new();
 
     if entry_def["type"] == "array" {
-        let mut i = 0;
-        while i < entry.members().len() {
-            parse_entry(String::from(key.as_str()) + "[" + &i.to_string() + "]", &mut entry[i], &entry_def["items"]);
-            i += 1;
+        for mut i in entry.members_mut() {
+            parse_entry(String::from(key.as_str()) + "[" + &i.to_string() + "]", &mut i, &entry_def["items"]);
         }
     } else if entry_def["type"] == "object" {
         if entry["type"] == "Feature" {
             return; // GeoJson is treated is a single value
         }
+        // Extract the embedded object leaving its id
         parse_object(entry);
         *entry = JsonValue::String(entry["id"].to_string());
     } else if entry_def.members().any(|i| i == "entrydef") && entry_def["references"] == "externalList" {
@@ -225,4 +242,9 @@ pub fn parse_external_list(url_raw: String, last_sync: Option<String>) {
     // self.external_lists_lock.release()
 }
 
+/*
+pub fn load_to_cache(entrypoint: &str) {
+
+}
+*/
 
