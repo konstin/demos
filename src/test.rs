@@ -1,9 +1,9 @@
 use chrono::*;
-
+use super::OParlCache;
 use std::path::Path;
 
 #[test]
-fn test_parse_object() {
+fn parse_object() {
     let mut input = object! {
         "id" => "http://localhost:8080/oparl/v1.0/paper/2",
         "type" => "https://schema.oparl.org/1.0/Paper",
@@ -30,19 +30,19 @@ fn test_parse_object() {
         "modified" => "2016-05-02T00:00:00+02:00"
     };
 
-    super::parse_object(&mut input);
+    OParlCache::new().parse_object(&mut input);
     assert_eq!(input, expected_output);
 }
 
 #[test]
-fn test_parse_external_list() {
+fn parse_external_list() {
     let eurl = "http://localhost:8080/oparl/v1.0/body/0/list/paper?a=b";
     let time = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
-    super::parse_external_list(eurl.to_string(), Some(time));
+    OParlCache::new().parse_external_list(eurl, Some(time));
 }
 
 #[test]
-fn test_external_list_iterator() {
+fn external_list_iterator() {
     let expected_ids = [
         "http://localhost:8080/oparl/v1.0/paper/1",
         "http://localhost:8080/oparl/v1.0/paper/2",
@@ -59,15 +59,16 @@ fn test_external_list_iterator() {
     assert_eq!(ids, expected_ids);
 }
 
-fn test_single_url_to_path(url: &str, path: &str) {
-    assert_eq! (super::url_to_path(url), Path::new(path));
-    assert_eq! (super::url_to_path(&(url.to_string() + "/")), Path::new(path));
+fn single_url_to_path(url: &str, path: &str) {
+    assert_eq! (OParlCache::new().url_to_path(url, ".json"), Path::new(path));
+    assert_eq! (OParlCache::new().url_to_path(url, ".json"), Path::new(path));
 }
 
 #[test]
-fn test_url_to_path() {
-    test_single_url_to_path("https://example.tld:8080/oparl/v1.0/paper/1", "/home/konsti/cache-rust/https:example.tld:8080/oparl/v1.0/paper/1.json");
-    test_single_url_to_path("https://example.tld/oparl/v1.0/paper/1", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0/paper/1.json");
-    test_single_url_to_path("https://example.tld", "/home/konsti/cache-rust/https:example.tld.json");
-    test_single_url_to_path("https://example.tld/api?modified_until=2016-05-03T00%3A00%3A00%2B02%3A00", "/home/konsti/cache-rust/https:example.tld/api.json");
+fn url_to_path() {
+    single_url_to_path("https://example.tld:8080/oparl/v1.0/paper/1", "/home/konsti/cache-rust/https:example.tld:8080/oparl/v1.0/paper/1.json");
+    single_url_to_path("https://example.tld/oparl/v1.0/paper/1", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0/paper/1.json");
+    single_url_to_path("https://example.tld/oparl/v1.0", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0.json");
+    single_url_to_path("https://example.tld", "/home/konsti/cache-rust/https:example.tld.json");
+    single_url_to_path("https://example.tld/api?modified_until=2016-05-03T00%3A00%3A00%2B02%3A00", "/home/konsti/cache-rust/https:example.tld/api.json");
 }
