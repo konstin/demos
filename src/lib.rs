@@ -314,7 +314,7 @@ impl OParlCache {
         let mut cache_status_file: File = File::create(&cache_status_filepath).unwrap();
         let mut cache_status_json = JsonValue::new_array();
         for i in 0..self.external_list_data.len() {
-            cache_status_json.push(JsonValue::new_object());
+            cache_status_json.push(JsonValue::new_object()).unwrap();
             cache_status_json[i]["url"] = JsonValue::from(self.external_list_data[i].0.clone());
             cache_status_json[i]["last_sync"] = JsonValue::from(self.external_list_data[i].1.clone());
         }
