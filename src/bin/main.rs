@@ -1,4 +1,5 @@
-//! This file define a CLI for the OParl Cache library
+//! This file defines a CLI for the OParlCache crate
+//! Use `cargo run -- --help` to get information on the available options
 
 extern crate oparl_cache;
 #[macro_use] extern crate clap;
@@ -16,5 +17,4 @@ fn main() {
 
     let mut cache = OParlCache::new();
     cache.load_to_cache(entrypoint);
-
 }

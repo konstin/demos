@@ -1,3 +1,30 @@
+//! OParl file cache
+//!
+//! Downloads the contents of an OParl API into a file based cache, allowing easy retieval and
+//! incremental cache updates
+//!
+//! # Usage
+//! Create an instance of the `OParlCache` struct with the url of the OParl entrypoint. Use the
+//! `load_to_cache()` method to download the contents of the API. You can the retrieve objects using
+//! `get_from_cache(id)`. Update by calling `load_to_cache()`. Note that embedded objects are
+//! stripped out and replaced by their id, by which you can retrieve them.
+//!
+//! Note that there is a CLI so you can `cargo run` this project. See `bin/main.rs` for more details
+//!
+//! # Implementation
+//! The cache folder contains a file called "cache_status.json" with an entry for each known OParl
+//! server. An entry contains the external lists of the server with the date of last update of that
+//! list. All OParl entities are stored in a file in the cache folder whose path is a reformatted
+//! version of the url. For external lists only the ids of the elements are stored.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use oparl_cache::OParlCache;
+//! let mut cache = OParlCache::new();
+//! cache.load_to_cache("http://localhost:8080/oparl/v1.0/");
+//! ```
+
 #[macro_use] extern crate json;
 extern crate hyper;
 extern crate chrono;
@@ -6,7 +33,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::fs::{File, create_dir_all};
 
-use chrono::*;
+use chrono::{Local};
 use json::JsonValue;
 use hyper::Url;
 use hyper::client::IntoUrl;
@@ -14,6 +41,7 @@ use hyper::client::IntoUrl;
 #[cfg(test)]
 mod test;
 
+/// Helper function to download an object and return it as parsed json
 fn download_json<U: IntoUrl + Clone>(url: U) -> Option<JsonValue> {
     let client = hyper::Client::new();
     let mut res = client.get(url.clone()).send().unwrap();
@@ -24,6 +52,7 @@ fn download_json<U: IntoUrl + Clone>(url: U) -> Option<JsonValue> {
     Some(json::parse(&json_string).unwrap())
 }
 
+/// Exposes the objects of an eternal list as iterator
 #[derive(Debug)]
 pub struct ExternalList {
     url: String,
@@ -75,7 +104,7 @@ impl Iterator for ExternalList {
     }
 }
 
-#[derive(Debug)]
+/// Abstracts the access to the cache for one oparl server
 pub struct OParlCache {
     external_list_data: Vec<(String, Option<String>)>,
     external_list_worker: Vec<String>,
@@ -150,6 +179,8 @@ impl OParlCache {
         Path::new(&cachefile).to_path_buf()
     }
 
+    /// Writes JSON to the path corresponding with the url. This will be an object and its id in the
+    /// most cases
     fn write_to_cache<U: IntoUrl>(&self, url: U, object: &JsonValue) {
         let filepath = self.url_to_path(url, ".json");
         println!("Writen to Cache: {}", filepath.display());
@@ -160,6 +191,8 @@ impl OParlCache {
         object.write_pretty(&mut file, 4).unwrap();
     }
 
+    /// Parses the data of a single attribute of an object recursively and replaces embedded objects
+    /// by the id. The embedded objects are them parsed by themselves
     fn parse_entry(&mut self, key: &str, entry: &mut JsonValue, entry_def: &JsonValue) {
         if entry_def["type"] == "array" {
             for mut i in entry.members_mut() {
@@ -180,6 +213,8 @@ impl OParlCache {
         }
     }
 
+    /// Determines the corresponding schema of an object, lets all it's attributes be parsed
+    /// recursively and then writes the object to the cache
     fn parse_object(&mut self, target: &mut JsonValue) {
         // Load the schema
         let mut schema = JsonValue::new_array();
@@ -268,6 +303,7 @@ impl OParlCache {
         // self.external_lists_lock.release()
     }
 
+    /// Loads the whole API to the cache or updates an existing cache
     pub fn load_to_cache<U: IntoUrl>(&mut self, entrypoint: U) {
         let entrypoint: Url = entrypoint.into_url().unwrap();
         let cache_status_filepath = self.url_to_path(entrypoint.as_str(), "").join("cache-status.json");
@@ -314,9 +350,10 @@ impl OParlCache {
         let mut cache_status_file: File = File::create(&cache_status_filepath).unwrap();
         let mut cache_status_json = JsonValue::new_array();
         for i in 0..self.external_list_data.len() {
-            cache_status_json.push(JsonValue::new_object()).unwrap();
-            cache_status_json[i]["url"] = JsonValue::from(self.external_list_data[i].0.clone());
-            cache_status_json[i]["last_sync"] = JsonValue::from(self.external_list_data[i].1.clone());
+            cache_status_json.push(object! {
+                "url" => JsonValue::from(self.external_list_data[i].0.clone()),
+                "last_sync" => JsonValue::from(self.external_list_data[i].1.clone())
+            }).unwrap();
         }
         cache_status_json.write(&mut cache_status_file).unwrap();
     }
