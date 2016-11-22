@@ -15,6 +15,6 @@ fn main() {
 
     let entrypoint = matches.value_of("entrypoint").unwrap_or("http://localhost:8080/oparl/v1.0/");
 
-    let mut cache = OParlCache::new();
+    let cache = OParlCache::new();
     cache.load_to_cache(entrypoint);
 }
