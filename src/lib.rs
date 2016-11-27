@@ -22,8 +22,12 @@
 //! ```rust
 //! use oparl_cache::OParlCache;
 //!
-//! let mut cache = OParlCache::new();
-//! cache.load_to_cache("http://localhost:8080/oparl/v1.0/");
+//! let cache = OParlCache::new(
+//!     "http://localhost:8080/oparl/v1.0/",
+//!     "/home/konsti/oparl/schema/",
+//!     "/home/konsti/cache-rust/"
+//! );
+//! cache.load_to_cache();
 //! ```
 
 #[macro_use] extern crate json;
@@ -33,88 +37,31 @@ extern crate chrono;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::fs::{File, create_dir_all};
+use std::str::FromStr;
 
 use chrono::{Local};
 use json::JsonValue;
 use hyper::Url;
 use hyper::client::IntoUrl;
 
+mod external_list;
+use external_list::*;
+
 #[cfg(test)]
 mod test;
 
-/// Helper function to download an object and return it as parsed json
-fn download_json<U: IntoUrl + Clone>(url: U) -> Option<JsonValue> {
-    let client = hyper::Client::new();
-    let mut res = client.get(url.clone()).send().unwrap();
-    println!("{:?}", url.into_url());
-    assert_eq! (res.status, hyper::Ok);
-    let mut json_string = String::new();
-    res.read_to_string(&mut json_string).unwrap();
-    Some(json::parse(&json_string).unwrap())
-}
-
-/// Exposes the objects of an eternal list as iterator
-#[derive(Debug)]
-pub struct ExternalList {
-    url: String,
-    response: Option<JsonValue>,
-}
-
-impl ExternalList {
-    pub fn new(url: String) -> ExternalList {
-        ExternalList { url: url, response: None }
-    }
-}
-
-impl Iterator for ExternalList {
-    type Item = json::JsonValue;
-
-    fn next(&mut self) -> Option<json::JsonValue> {
-        if self.response.is_none() {
-            self.response = download_json(&self.url)
-        }
-
-        let mut load_required = false;
-        if let Some(ref mut response_ref) = self.response {
-            if response_ref["data"].len() == 0 {
-                if response_ref["links"].entries().any(|(x, _)| x == "next") {
-                    self.url = response_ref["links"]["next"].to_string();
-                    load_required = true;
-                } else {
-                    return None;
-                }
-            }
-        }
-
-        if load_required {
-            self.response = download_json(&self.url)
-        }
-
-        // This unwrap can't fail as download_url will set response to some
-        if let Some(ref mut response_ref) = self.response {
-            if let JsonValue::Array(ref mut data) = response_ref["data"] {
-                return Some(data.remove(0));
-            } else {
-                println!("Broken 1");
-                return None;
-            }
-        } else {
-            println!("Broken 2");
-            return None;
-        }
-    }
-}
-
 /// Abstracts the access to the cache for one oparl server
-pub struct OParlCache {
+pub struct OParlCache<'a> {
+    entrypoint: &'a str,
     schema: JsonValue,
+    cache_dir: &'a str,
 }
 
-impl OParlCache {
-    pub fn new() -> OParlCache {
+impl<'a> OParlCache<'a> {
+    pub fn new(entrypoint: &'a str, schema_dir: &'a str, cache_dir: &'a str) -> OParlCache<'a> {
         // Load the schema
         let mut schema = JsonValue::new_array();
-        for i in Path::new("/home/konsti/oparl/schema/").read_dir().unwrap() {
+        for i in Path::new(schema_dir).read_dir().unwrap() {
             let mut f: File = File::open(i.unwrap().path()).unwrap();
             let mut s = String::new();
             f.read_to_string(&mut s).unwrap();
@@ -124,29 +71,32 @@ impl OParlCache {
         }
 
         assert_eq!(schema.len(), 12);
-        OParlCache { schema: schema }
+        OParlCache { entrypoint: entrypoint, schema: schema, cache_dir: cache_dir }
     }
 
     fn add_external_list(&self, url: String, last_update: Option<String>,
                          external_list_adder: &mut Vec<(String, Option<String>)>) {
-        println!("Adding External List: {}", url);
-        external_list_adder.push((url, last_update));
+        if external_list_adder.iter().all(|i| url != i.0) {
+            println!("Adding External List: {}", url);
+            external_list_adder.push((url, last_update));
+        } else {
+            println!("External List {} already known", url)
+        }
     }
 
     /// Takes an `url` as string and returns the corresponding cache path
     /// <cachedir>/<scheme>[:<host>][:<port>][/<path>].json
     pub fn url_to_path<U: IntoUrl>(&self, url: U, suffix: &str) -> PathBuf {
-        let cachefolder = "/home/konsti/cache-rust/";
         let mut url: Url = url.into_url().unwrap();
 
         // Remove the oparl filters
         // Those parameters shouldn't be parsed on anyway, but just in case we'll do this
         let url_binding: Url = url.clone();
         let query_without_filters = url_binding.query_pairs()
-            .filter(|&(ref x, _)| x != "modified_until")
-            .filter(|&(ref x, _)| x != "modified_since")
-            .filter(|&(ref x, _)| x != "created_since")
-            .filter(|&(ref x, _)| x != "created_until");
+            .filter(|&(ref arg_name, _)| arg_name != "modified_until")
+            .filter(|&(ref arg_name, _)| arg_name != "modified_since")
+            .filter(|&(ref arg_name, _)| arg_name != "created_since")
+            .filter(|&(ref arg_name, _)| arg_name != "created_until");
 
         let url: &mut Url = url.query_pairs_mut()
             .clear()
@@ -155,7 +105,7 @@ impl OParlCache {
 
         // Compute the path
         // Folder
-        let mut cachefile = cachefolder.to_string();
+        let mut cachefile = self.cache_dir.to_string();
         // Schema and host
         cachefile += url.scheme();
 
@@ -220,6 +170,9 @@ impl OParlCache {
             // Extract the embedded object leaving its id
             self.parse_object(entry, external_list_adder);
             *entry = JsonValue::String(entry["id"].to_string());
+            /*if external_list_adder.iter().all(|i| entry != &i.0) {
+                self.add_external_list(entry.to_string(), None, external_list_adder);
+            }*/
         } else if entry_def["references"] == "externalList" {
             if external_list_adder.iter().all(|i| entry != &i.0) {
                 self.add_external_list(entry.to_string(), None, external_list_adder);
@@ -233,31 +186,35 @@ impl OParlCache {
                     external_list_adder: &mut Vec<(String, Option<String>)>) {
         let let_binding = target["type"].to_string();
         let oparl_type = let_binding.split("/").last().unwrap();
-        //let spec_for_object = &self.schema[oparl_type]["properties"];
+        let spec_for_object = &self.schema[oparl_type]["properties"];
 
         for (key, mut value) in target.entries_mut() {
             // Check if the key is defined in the specification
-            if self.schema[oparl_type]["properties"].entries().map(|(key, _)| key).any(|i| i == key) {
-                self.parse_entry(key, &mut value, &self.schema[oparl_type]["properties"][key], external_list_adder);
+            if spec_for_object.entries().map(|(key, _)| key).any(|i| i == key) {
+                self.parse_entry(key, &mut value, &spec_for_object[key], external_list_adder);
             }
         }
 
         self.write_to_cache(target["id"].as_str().unwrap(), &target)
     }
 
+    /// Downloads a whole external list and saves the results to the cache
+    /// If `last_sync` is given, the filter modified_since will be appended to the url
+    /// `external_list_adder` allows adding external lists that were found when parsing this one
     pub fn parse_external_list<U: IntoUrl + Copy>(&self, url: U, last_sync: Option<String>,
                                                   external_list_adder: &mut Vec<(String, Option<String>)>) {
+        // Taake the time before the downloading as the data can change while obtaining pages
         let this_sync = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
 
         let limit: Option<usize> = None;
-        let mut url_only_new: Url = url.into_url().unwrap();
+        let mut url_with_filters: Url = url.into_url().unwrap();
 
         if let Some(last_sync_time) = last_sync {
             // Add the modified_since filter
-            url_only_new.query_pairs_mut().append_pair("modified_since", &last_sync_time).finish();
+            url_with_filters.query_pairs_mut().append_pair("modified_since", &last_sync_time).finish();
         }
 
-        let elist = ExternalList::new(url_only_new.to_string());
+        let elist = ExternalList::new(url_with_filters.to_string());
 
         let mut urls = Vec::new();
 
@@ -307,8 +264,8 @@ impl OParlCache {
     }
 
     /// Loads the whole API to the cache or updates an existing cache
-    pub fn load_to_cache<U: IntoUrl>(&self, entrypoint: U) {
-        let entrypoint: Url = entrypoint.into_url().unwrap();
+    pub fn load_to_cache(&self) {
+        let entrypoint: Url = Url::from_str(self.entrypoint).unwrap();
         let cache_status_filepath = self.url_to_path(entrypoint.as_str(), "").join("cache-status.json");
         let mut external_list_adder: Vec<(String, Option<String>)>;
 
@@ -360,7 +317,8 @@ impl OParlCache {
                 "last_sync" => JsonValue::from(external_list_adder[i].1.clone())
             }).unwrap();
         }
-        cache_status_json.write(&mut cache_status_file).unwrap();
+        
+        cache_status_json.write_pretty(&mut cache_status_file, 4).unwrap();
     }
 }
 
