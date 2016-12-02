@@ -85,7 +85,7 @@ impl<'a> OParlCache<'a> {
     }
 
     /// Takes an `url` as string and returns the corresponding cache path
-    /// <cachedir>/<scheme>[:<host>][:<port>][/<path>].json
+    /// <cachedir>/<scheme>[:<host>][:<port>][/<path>]<suffix>
     pub fn url_to_path<U: IntoUrl>(&self, url: U, suffix: &str) -> PathBuf {
         let mut url: Url = url.into_url().unwrap();
 
@@ -319,6 +319,17 @@ impl<'a> OParlCache<'a> {
         }
         
         cache_status_json.write_pretty(&mut cache_status_file, 4).unwrap();
+    }
+
+    /// Retrieves a stored api response from the cache. Returns an io::Error if the was an error
+    /// reading the cache file
+    pub fn retrieve_from_cache<U: IntoUrl>(&self, url: U) -> Result<JsonValue, std::io::Error> {
+        let path = self.url_to_path(url, ".json");
+        let mut s = String::new();
+        let mut file: File = File::open(path)?;
+        file.read_to_string(&mut s)?;
+        let json = json::from(s.as_str());
+        Ok(json)
     }
 }
 

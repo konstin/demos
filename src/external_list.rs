@@ -42,11 +42,15 @@ impl Iterator for ExternalList {
     type Item = json::JsonValue;
 
     fn next<'a>(&mut self) -> Option<json::JsonValue> {
+        // To avoid having multiple mutable borrows of self, a possibly existing version of
+        // self.response is swapped out againt an Err at the beginning and re-emplaced at the end
+        // of the function call.
+
         let mut response_some: ::std::result::Result<_, _> = {
             match self.response {
                 Some(ref mut remaining) => {
                     // Avoid moving self.response by assinging an intermediate value
-                    let mut swap_partner = Err(From::from("asdf"));
+                    let mut swap_partner = Err(From::from("placeholder"));
                     mem::swap(remaining, &mut swap_partner);
                     swap_partner
                 },
