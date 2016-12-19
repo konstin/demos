@@ -2,6 +2,7 @@ use chrono::{Local};
 use json;
 
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use super::OParlCache;
 use super::external_list::ExternalList;
@@ -42,8 +43,8 @@ fn parse_object_extract_internal() {
         "modified" => "2016-05-02T00:00:00+02:00"
     };
 
-    let mut external_list_adder = Vec::new();
-    instance().parse_object(&mut input, &mut external_list_adder);
+    let mut external_list_adder = Arc::new(Mutex::new(Vec::new()));
+    instance().parse_object(&mut input, external_list_adder);
     assert_eq!(input, expected_output);
     assert_eq!(external_list_adder, vec![]);
 }
@@ -112,6 +113,7 @@ fn external_list() {
     assert_eq!(ids, expected_ids);
 }
 
+
 fn single_url_to_path(url: &str, query_string: &str, path: &str) {
     assert_eq! (instance().url_to_path((url.to_string() + query_string).as_str(), ".json"), Path::new(path));
     assert_eq! (instance().url_to_path((url.to_string() + "/" + query_string).as_str(), ".json"), Path::new(path));
@@ -119,6 +121,9 @@ fn single_url_to_path(url: &str, query_string: &str, path: &str) {
 
 #[test]
 fn url_to_path() {
+    let cache_status_file = "/home/konsti/cache-rust/http:localhost:8080/oparl/v1.0/cache-status.json";
+    assert_eq! (instance().url_to_path(instance().entrypoint, "").join("cache-status.json"), Path::new(cache_status_file));
+
     single_url_to_path("https://example.tld:8080/oparl/v1.0/paper/1", "", "/home/konsti/cache-rust/https:example.tld:8080/oparl/v1.0/paper/1.json");
     single_url_to_path("https://example.tld/oparl/v1.0/paper/1", "", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0/paper/1.json");
     single_url_to_path("https://example.tld/oparl/v1.0", "", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0.json");

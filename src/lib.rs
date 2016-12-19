@@ -38,6 +38,8 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::fs::{File, create_dir_all};
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 use chrono::{Local};
 use json::JsonValue;
@@ -45,6 +47,7 @@ use hyper::Url;
 use hyper::client::IntoUrl;
 
 mod external_list;
+
 use external_list::*;
 
 #[cfg(test)]
@@ -75,7 +78,8 @@ impl<'a> OParlCache<'a> {
     }
 
     fn add_external_list(&self, url: String, last_update: Option<String>,
-                         external_list_adder: &mut Vec<(String, Option<String>)>) {
+                         external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
+        let mut external_list_adder = external_list_adder.lock().unwrap();
         if external_list_adder.iter().all(|i| url != i.0) {
             println!("Adding External List: {}", url);
             external_list_adder.push((url, last_update));
@@ -157,25 +161,25 @@ impl<'a> OParlCache<'a> {
     /// Parses the data of a single attribute of an object recursively and replaces embedded objects
     /// by the id. The embedded objects are them parsed by themselves
     fn parse_entry(&self, key: &str, entry: &mut JsonValue, entry_def: &JsonValue,
-                   external_list_adder: &mut Vec<(String, Option<String>)>) {
+                   external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
         if entry_def["type"] == "array" {
             for mut i in entry.members_mut() {
                 let key = key.to_string() + "[" + &i.to_string() + "]";
-                self.parse_entry(key.as_str(), &mut i, &entry_def["items"], external_list_adder);
+                self.parse_entry(key.as_str(), &mut i, &entry_def["items"], &external_list_adder);
             }
         } else if entry_def["type"] == "object" {
             if entry["type"] == "Feature" {
                 return; // GeoJson is treated is a single value
             }
             // Extract the embedded object leaving its id
-            self.parse_object(entry, external_list_adder);
+            self.parse_object(entry, &external_list_adder);
             *entry = JsonValue::String(entry["id"].to_string());
             /*if external_list_adder.iter().all(|i| entry != &i.0) {
                 self.add_external_list(entry.to_string(), None, external_list_adder);
             }*/
         } else if entry_def["references"] == "externalList" {
-            if external_list_adder.iter().all(|i| entry != &i.0) {
-                self.add_external_list(entry.to_string(), None, external_list_adder);
+            if external_list_adder.lock().unwrap().iter().all(|i| entry != &i.0) {
+                self.add_external_list(entry.to_string(), None, &external_list_adder);
             }
         }
     }
@@ -183,7 +187,7 @@ impl<'a> OParlCache<'a> {
     /// Determines the corresponding schema of an object, lets all it's attributes be parsed
     /// recursively and then writes the object to the cache
     fn parse_object(&self, target: &mut JsonValue,
-                    external_list_adder: &mut Vec<(String, Option<String>)>) {
+                    external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
         let let_binding = target["type"].to_string();
         let oparl_type = let_binding.split("/").last().unwrap();
         let spec_for_object = &self.schema[oparl_type]["properties"];
@@ -191,7 +195,7 @@ impl<'a> OParlCache<'a> {
         for (key, mut value) in target.entries_mut() {
             // Check if the key is defined in the specification
             if spec_for_object.entries().map(|(key, _)| key).any(|i| i == key) {
-                self.parse_entry(key, &mut value, &spec_for_object[key], external_list_adder);
+                self.parse_entry(key, &mut value, &spec_for_object[key], &external_list_adder);
             }
         }
 
@@ -202,7 +206,7 @@ impl<'a> OParlCache<'a> {
     /// If `last_sync` is given, the filter modified_since will be appended to the url
     /// `external_list_adder` allows adding external lists that were found when parsing this one
     pub fn parse_external_list<U: IntoUrl + Copy>(&self, url: U, last_sync: Option<String>,
-                                                  external_list_adder: &mut Vec<(String, Option<String>)>) {
+                                                  external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
         // Taake the time before the downloading as the data can change while obtaining pages
         let this_sync = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
 
@@ -219,13 +223,14 @@ impl<'a> OParlCache<'a> {
         let mut urls = Vec::new();
 
         if let Some(limeter) = limit {
+            // Don't
             for mut i in elist.take(limeter) {
-                self.parse_object(&mut i, external_list_adder);
+                self.parse_object(&mut i, &external_list_adder);
                 urls.push(i["id"].to_string());
             }
         } else {
             for mut i in elist {
-                self.parse_object(&mut i, external_list_adder);
+                self.parse_object(&mut i, &external_list_adder);
                 urls.push(i["id"].to_string());
             }
         }
@@ -252,7 +257,7 @@ impl<'a> OParlCache<'a> {
         self.write_to_cache(url, &urls_as_json);
 
         // self.external_lists_lock.acquire()
-        for i in external_list_adder.iter_mut() {
+        for i in external_list_adder.lock().unwrap().iter_mut() {
             if i.0 == url.into_url().unwrap().as_str() {
                 i.1 = Some(this_sync);
                 break;
@@ -267,7 +272,7 @@ impl<'a> OParlCache<'a> {
     pub fn load_to_cache(&self) {
         let entrypoint: Url = Url::from_str(self.entrypoint).unwrap();
         let cache_status_filepath = self.url_to_path(entrypoint.as_str(), "").join("cache-status.json");
-        let mut external_list_adder: Vec<(String, Option<String>)>;
+        let external_list_adder: Arc<Mutex<Vec<(String, Option<String>)>>>;
 
         // Initialise external_list_adder
         if cache_status_filepath.exists() {
@@ -276,20 +281,21 @@ impl<'a> OParlCache<'a> {
             let mut cache_status_file = File::open(&cache_status_filepath).unwrap();
             let mut read = String::new();
             cache_status_file.read_to_string(&mut read).unwrap();
-            external_list_adder = json::parse(&read).unwrap().members()
+            let known_external_lists = json::parse(&read).unwrap().members()
                 .map(|i| (i["url"].to_string(), Some(i["last_sync"].to_string())))
-                .collect();
+                .collect::<Vec<(String, Option<String>)>>();
 
-            println!("External lists found in cache: {}", external_list_adder.len())
+            println!("External lists found in cache: {}", known_external_lists.len());
+            external_list_adder = Arc::new(Mutex::new(known_external_lists));
         } else {
             // We don't have a cache, so let's use an empty template
             println!("No cache found, initializing...");
             create_dir_all(cache_status_filepath.parent().unwrap()).unwrap();
-            external_list_adder = Vec::new();
+            external_list_adder = Arc::new(Mutex::new(Vec::new()));
         }
 
         println!("\nLoaded from cache:");
-        for i in external_list_adder.iter() {
+        for i in external_list_adder.lock().unwrap().iter() {
             println!("{}: {}", i.1.clone().unwrap_or("None".to_string()), i.0);
         }
         println!("");
@@ -297,27 +303,49 @@ impl<'a> OParlCache<'a> {
         // Download the entrypoint which is the System object
         // This will set the first external list, which is the body list
         let mut system_object = download_json(entrypoint).unwrap();
-        self.parse_object(&mut system_object, &mut external_list_adder);
+        self.parse_object(&mut system_object, &external_list_adder.clone());
+
+        //let mut threads = Vec::new();
 
         // Download and cache all external lists while adding those newly found
+        // The weird command order is due to the Mutex-locking
         let mut i = 0;
-        while i < external_list_adder.len() {
-            let ref x = external_list_adder[i].0.clone();
-            let y = external_list_adder[i].1.clone();
-            self.parse_external_list(x, y, &mut external_list_adder);
+        loop {
+            let url;
+            let last_update;
+            {
+                let external_list_adder = external_list_adder.lock().unwrap();
+                if i >= external_list_adder.len() {
+                    break;
+                }
+
+                url = external_list_adder[i].0.clone();
+                last_update = external_list_adder[i].1.clone();
+            }
+            //let thread = thread::spawn(|| {
+                self.parse_external_list(&url, last_update, &external_list_adder.clone());
+            //});
+
+            //threads.push(thread);
             i += 1;
         }
+
 
         // Write the results back to the cache
         let mut cache_status_file: File = File::create(&cache_status_filepath).unwrap();
         let mut cache_status_json = JsonValue::new_array();
-        for i in 0..external_list_adder.len() {
-            cache_status_json.push(object! {
-                "url" => JsonValue::from(external_list_adder[i].0.clone()),
-                "last_sync" => JsonValue::from(external_list_adder[i].1.clone())
-            }).unwrap();
+
+        {
+            let external_list_adder = external_list_adder.lock().unwrap();
+
+            for i in 0..external_list_adder.len() {
+                cache_status_json.push(object! {
+                    "url" => JsonValue::from(external_list_adder[i].0.clone()),
+                    "last_sync" => JsonValue::from(external_list_adder[i].1.clone())
+                }).unwrap();
+            }
         }
-        
+
         cache_status_json.write_pretty(&mut cache_status_file, 4).unwrap();
     }
 
