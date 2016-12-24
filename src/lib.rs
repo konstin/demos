@@ -30,16 +30,17 @@
 //! cache.load_to_cache();
 //! ```
 
-#[macro_use] extern crate json;
+#[macro_use]
+extern crate json;
 extern crate hyper;
 extern crate chrono;
+extern crate crossbeam;
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::fs::{File, create_dir_all};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::thread;
 
 use chrono::{Local};
 use json::JsonValue;
@@ -222,8 +223,8 @@ impl<'a> OParlCache<'a> {
 
         let mut urls = Vec::new();
 
+        // TODO: use traits unstead of this weird type system hack
         if let Some(limeter) = limit {
-            // Don't
             for mut i in elist.take(limeter) {
                 self.parse_object(&mut i, &external_list_adder);
                 urls.push(i["id"].to_string());
@@ -256,16 +257,12 @@ impl<'a> OParlCache<'a> {
         }
         self.write_to_cache(url, &urls_as_json);
 
-        // self.external_lists_lock.acquire()
         for i in external_list_adder.lock().unwrap().iter_mut() {
             if i.0 == url.into_url().unwrap().as_str() {
                 i.1 = Some(this_sync);
                 break;
             }
         };
-
-        // save();
-        // self.external_lists_lock.release()
     }
 
     /// Loads the whole API to the cache or updates an existing cache
@@ -274,7 +271,7 @@ impl<'a> OParlCache<'a> {
         let cache_status_filepath = self.url_to_path(entrypoint.as_str(), "").join("cache-status.json");
         let external_list_adder: Arc<Mutex<Vec<(String, Option<String>)>>>;
 
-        // Initialise external_list_adder
+        // Initialbash count number of files in directory recursive external_list_adder
         if cache_status_filepath.exists() {
             // We have a cache, so let's load it
             println!("Cache found, updating...");
@@ -305,31 +302,32 @@ impl<'a> OParlCache<'a> {
         let mut system_object = download_json(entrypoint).unwrap();
         self.parse_object(&mut system_object, &external_list_adder.clone());
 
-        //let mut threads = Vec::new();
-
         // Download and cache all external lists while adding those newly found
-        // The weird command order is due to the Mutex-locking
-        let mut i = 0;
-        loop {
-            let url;
-            let last_update;
-            {
-                let external_list_adder = external_list_adder.lock().unwrap();
-                if i >= external_list_adder.len() {
-                    break;
+        // New external lists may be found when parsing the objects of another external list,
+        // so a while-loop can't bbe used here
+        // The weird command order is due to the Mutex-locking which would otherwise dead-lock
+        // the child processes
+        crossbeam::scope(|scope| {
+            let mut i = 0;
+            loop {
+                let url;
+                let last_update;
+                {
+                    let external_list_adder = external_list_adder.lock().unwrap();
+                    if i >= external_list_adder.len() {
+                        break;
+                    }
+
+                    url = external_list_adder[i].0.clone();
+                    last_update = external_list_adder[i].1.clone();
                 }
-
-                url = external_list_adder[i].0.clone();
-                last_update = external_list_adder[i].1.clone();
+                let external_list_adder = external_list_adder.clone();
+                scope.spawn(move || {
+                    self.parse_external_list(&url, last_update, &external_list_adder);
+                });
+                i += 1;
             }
-            //let thread = thread::spawn(|| {
-                self.parse_external_list(&url, last_update, &external_list_adder.clone());
-            //});
-
-            //threads.push(thread);
-            i += 1;
-        }
-
+        });
 
         // Write the results back to the cache
         let mut cache_status_file: File = File::create(&cache_status_filepath).unwrap();

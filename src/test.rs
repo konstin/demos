@@ -43,10 +43,10 @@ fn parse_object_extract_internal() {
         "modified" => "2016-05-02T00:00:00+02:00"
     };
 
-    let mut external_list_adder = Arc::new(Mutex::new(Vec::new()));
-    instance().parse_object(&mut input, external_list_adder);
+    let external_list_adder = Arc::new(Mutex::new(Vec::new()));
+    instance().parse_object(&mut input, &external_list_adder);
     assert_eq!(input, expected_output);
-    assert_eq!(external_list_adder, vec![]);
+    assert_eq!(*external_list_adder.lock().unwrap(), vec![]);
 }
 
 #[test]
@@ -74,11 +74,11 @@ fn parse_object_find_external_list() {
     let mut expected_output = json::parse(&input.dump()).unwrap();
     expected_output["legislativeTerm"][0] = expected_output["legislativeTerm"][0]["id"].take();
 
-    let mut external_list_adder = Vec::new();
-    instance().parse_object(&mut input, &mut external_list_adder);
+    let external_list_adder = Arc::new(Mutex::new(Vec::new()));
+    instance().parse_object(&mut input, &external_list_adder);
 
     assert_eq!(input, expected_output);
-    assert_eq!(external_list_adder, vec![
+    assert_eq!(*external_list_adder.lock().unwrap(), vec![
         ("http://localhost:8080/oparl/v1.0/body/0/list/organization".to_string(), None),
         ("http://localhost:8080/oparl/v1.0/body/0/list/person".to_string(), None),
         ("http://localhost:8080/oparl/v1.0/body/0/list/meeting".to_string(), None),
@@ -90,9 +90,9 @@ fn parse_object_find_external_list() {
 fn parse_external_list() {
     let eurl = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
     let time = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
-    let mut external_list_adder = Vec::new();
-    instance().parse_external_list(eurl, Some(time), &mut external_list_adder);
-    assert_eq!(external_list_adder, vec![]);
+    let external_list_adder = Arc::new(Mutex::new(Vec::new()));
+    instance().parse_external_list(eurl, Some(time), &external_list_adder);
+    assert_eq!(*external_list_adder.lock().unwrap(), vec![]);
 }
 
 #[test]
