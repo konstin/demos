@@ -11,7 +11,8 @@ fn instance<'a>() -> OParlCache<'a> {
     OParlCache::new(
         "http://localhost:8080/oparl/v1.0",
         "/home/konsti/oparl/schema/",
-        "/home/konsti/cache-rust/"
+        "/home/konsti/cache-rust/",
+        super::DEFAULT_CACHE_STATUS_FILE
     )
 }
 

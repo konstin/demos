@@ -25,7 +25,8 @@
 //! let cache = OParlCache::new(
 //!     "http://localhost:8080/oparl/v1.0/",
 //!     "/home/konsti/oparl/schema/",
-//!     "/home/konsti/cache-rust/"
+//!     "/home/konsti/cache-rust/",
+//!     oparl_cache::DEFAULT_CACHE_STATUS_FILE
 //! );
 //! cache.load_to_cache();
 //! ```
@@ -54,15 +55,19 @@ use external_list::*;
 #[cfg(test)]
 mod test;
 
+pub const DEFAULT_CACHE_STATUS_FILE: &'static str = "cache_status.json";
+pub const FILE_EXTENSION: &'static str = ".json";
+
 /// Abstracts the access to the cache for one oparl server
 pub struct OParlCache<'a> {
     entrypoint: &'a str,
     schema: JsonValue,
     cache_dir: &'a str,
+    cache_status_file: &'a str
 }
 
 impl<'a> OParlCache<'a> {
-    pub fn new(entrypoint: &'a str, schema_dir: &'a str, cache_dir: &'a str) -> OParlCache<'a> {
+    pub fn new(entrypoint: &'a str, schema_dir: &'a str, cache_dir: &'a str, cache_status_file: &'a str) -> OParlCache<'a> {
         // Load the schema
         let mut schema = JsonValue::new_array();
         for i in Path::new(schema_dir).read_dir().unwrap() {
@@ -75,7 +80,12 @@ impl<'a> OParlCache<'a> {
         }
 
         assert_eq!(schema.len(), 12);
-        OParlCache { entrypoint: entrypoint, schema: schema, cache_dir: cache_dir }
+        OParlCache {
+            entrypoint: entrypoint,
+            schema: schema,
+            cache_dir: cache_dir,
+            cache_status_file: cache_status_file
+        }
     }
 
     fn add_external_list(&self, url: String, last_update: Option<String>,
@@ -150,7 +160,7 @@ impl<'a> OParlCache<'a> {
     /// Writes JSON to the path corresponding with the url. This will be an object and its id in the
     /// most cases
     fn write_to_cache<U: IntoUrl>(&self, url: U, object: &JsonValue) {
-        let filepath = self.url_to_path(url, ".json");
+        let filepath = self.url_to_path(url, FILE_EXTENSION);
         println!("Writen to Cache: {}", filepath.display());
 
         create_dir_all(filepath.parent().unwrap()).unwrap();
@@ -240,7 +250,7 @@ impl<'a> OParlCache<'a> {
         urls.append(&mut old_urls);
 
         // Get the urls that have already been retrieved when not using a modified_since
-        let old_urls_filepath = self.url_to_path(url, ".json");
+        let old_urls_filepath = self.url_to_path(url, FILE_EXTENSION);
         let mut urls_as_json = {
             if old_urls_filepath.exists() {
                 let mut old_urls_file = File::open(&old_urls_filepath).unwrap();
@@ -265,13 +275,41 @@ impl<'a> OParlCache<'a> {
         };
     }
 
+    /// Download and cache all external lists while adding those newly found in a fully parallelized
+    /// manner. This function blocks until all threads have finished.
+    /// The weird command order is due to the Mutex-locking which would otherwise dead-lock
+    /// the child threads
+    fn load_all_external_lists(&self, external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
+        crossbeam::scope(|scope| {
+            let mut i = 0;
+            loop {
+                let url;
+                let last_update;
+                {
+                    let external_list_adder = external_list_adder.lock().unwrap();
+                    if i >= external_list_adder.len() {
+                        break;
+                    }
+
+                    url = external_list_adder[i].0.clone();
+                    last_update = external_list_adder[i].1.clone();
+                }
+                let external_list_adder = external_list_adder.clone();
+                scope.spawn(move || {
+                    self.parse_external_list(&url, last_update, &external_list_adder);
+                });
+                i += 1;
+            }
+        });
+    }
+
     /// Loads the whole API to the cache or updates an existing cache
+    /// This function does only do the loading saving and forwards the actual work
     pub fn load_to_cache(&self) {
         let entrypoint: Url = Url::from_str(self.entrypoint).unwrap();
-        let cache_status_filepath = self.url_to_path(entrypoint.as_str(), "").join("cache-status.json");
+        let cache_status_filepath = self.url_to_path(entrypoint.as_str(), "").join(self.cache_status_file);
         let external_list_adder: Arc<Mutex<Vec<(String, Option<String>)>>>;
 
-        // Initialbash count number of files in directory recursive external_list_adder
         if cache_status_filepath.exists() {
             // We have a cache, so let's load it
             println!("Cache found, updating...");
@@ -302,46 +340,20 @@ impl<'a> OParlCache<'a> {
         let mut system_object = download_json(entrypoint).unwrap();
         self.parse_object(&mut system_object, &external_list_adder.clone());
 
-        // Download and cache all external lists while adding those newly found
-        // New external lists may be found when parsing the objects of another external list,
-        // so a while-loop can't bbe used here
-        // The weird command order is due to the Mutex-locking which would otherwise dead-lock
-        // the child processes
-        crossbeam::scope(|scope| {
-            let mut i = 0;
-            loop {
-                let url;
-                let last_update;
-                {
-                    let external_list_adder = external_list_adder.lock().unwrap();
-                    if i >= external_list_adder.len() {
-                        break;
-                    }
-
-                    url = external_list_adder[i].0.clone();
-                    last_update = external_list_adder[i].1.clone();
-                }
-                let external_list_adder = external_list_adder.clone();
-                scope.spawn(move || {
-                    self.parse_external_list(&url, last_update, &external_list_adder);
-                });
-                i += 1;
-            }
-        });
+        // Here the actual work is done
+        self.load_all_external_lists(&external_list_adder);
 
         // Write the results back to the cache
         let mut cache_status_file: File = File::create(&cache_status_filepath).unwrap();
         let mut cache_status_json = JsonValue::new_array();
 
-        {
-            let external_list_adder = external_list_adder.lock().unwrap();
+        let external_list_adder = external_list_adder.lock().unwrap();
 
-            for i in 0..external_list_adder.len() {
-                cache_status_json.push(object! {
-                    "url" => JsonValue::from(external_list_adder[i].0.clone()),
-                    "last_sync" => JsonValue::from(external_list_adder[i].1.clone())
-                }).unwrap();
-            }
+        for i in 0..external_list_adder.len() {
+            cache_status_json.push(object! {
+                "url" => JsonValue::from(external_list_adder[i].0.clone()),
+                "last_sync" => JsonValue::from(external_list_adder[i].1.clone())
+            }).unwrap();
         }
 
         cache_status_json.write_pretty(&mut cache_status_file, 4).unwrap();
@@ -350,7 +362,7 @@ impl<'a> OParlCache<'a> {
     /// Retrieves a stored api response from the cache. Returns an io::Error if the was an error
     /// reading the cache file
     pub fn retrieve_from_cache<U: IntoUrl>(&self, url: U) -> Result<JsonValue, std::io::Error> {
-        let path = self.url_to_path(url, ".json");
+        let path = self.url_to_path(url, FILE_EXTENSION);
         let mut s = String::new();
         let mut file: File = File::open(path)?;
         file.read_to_string(&mut s)?;
