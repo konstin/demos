@@ -116,14 +116,14 @@ fn external_list() {
 
 
 fn single_url_to_path(url: &str, query_string: &str, path: &str) {
-    assert_eq! (instance().url_to_path((url.to_string() + query_string).as_str(), ".json"), Path::new(path));
-    assert_eq! (instance().url_to_path((url.to_string() + "/" + query_string).as_str(), ".json"), Path::new(path));
+    assert_eq! (instance().url_to_path((url.to_string() + query_string).as_str(), ".json").unwrap(), Path::new(path));
+    assert_eq! (instance().url_to_path((url.to_string() + "/" + query_string).as_str(), ".json").unwrap(), Path::new(path));
 }
 
 #[test]
 fn url_to_path() {
     let cache_status_file = "/home/konsti/cache-rust/http:localhost:8080/oparl/v1.0/cache-status.json";
-    assert_eq! (instance().url_to_path(instance().entrypoint, "").join("cache-status.json"), Path::new(cache_status_file));
+    assert_eq! (instance().url_to_path(instance().entrypoint, "").unwrap().join("cache-status.json"), Path::new(cache_status_file));
 
     single_url_to_path("https://example.tld:8080/oparl/v1.0/paper/1", "", "/home/konsti/cache-rust/https:example.tld:8080/oparl/v1.0/paper/1.json");
     single_url_to_path("https://example.tld/oparl/v1.0/paper/1", "", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0/paper/1.json");

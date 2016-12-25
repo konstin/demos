@@ -37,6 +37,7 @@ extern crate hyper;
 extern crate chrono;
 extern crate crossbeam;
 
+use std::error::Error;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::fs::{File, create_dir_all};
@@ -47,6 +48,7 @@ use chrono::{Local};
 use json::JsonValue;
 use hyper::Url;
 use hyper::client::IntoUrl;
+use hyper::error::ParseError;
 
 mod external_list;
 
@@ -67,7 +69,8 @@ pub struct OParlCache<'a> {
 }
 
 impl<'a> OParlCache<'a> {
-    pub fn new(entrypoint: &'a str, schema_dir: &'a str, cache_dir: &'a str, cache_status_file: &'a str) -> OParlCache<'a> {
+    pub fn new(entrypoint: &'a str, schema_dir: &'a str, cache_dir: &'a str,
+               cache_status_file: &'a str) -> OParlCache<'a> {
         // Load the schema
         let mut schema = JsonValue::new_array();
         for i in Path::new(schema_dir).read_dir().unwrap() {
@@ -99,10 +102,11 @@ impl<'a> OParlCache<'a> {
         }
     }
 
-    /// Takes an `url` as string and returns the corresponding cache path
+    /// Takes an `url` and returns the corresponding cache path
     /// <cachedir>/<scheme>[:<host>][:<port>][/<path>]<suffix>
-    pub fn url_to_path<U: IntoUrl>(&self, url: U, suffix: &str) -> PathBuf {
-        let mut url: Url = url.into_url().unwrap();
+    /// Returns an error if the given url is not a valid url
+    pub fn url_to_path<U: IntoUrl>(&self, url: U, suffix: &str) -> Result<PathBuf, ParseError>{
+        let mut url: Url = url.into_url()?;
 
         // Remove the oparl filters
         // Those parameters shouldn't be parsed on anyway, but just in case we'll do this
@@ -154,19 +158,20 @@ impl<'a> OParlCache<'a> {
         // File extension
         cachefile += suffix;
 
-        Path::new(&cachefile).to_path_buf()
+        Ok(Path::new(&cachefile).to_path_buf())
     }
 
     /// Writes JSON to the path corresponding with the url. This will be an object and its id in the
     /// most cases
-    fn write_to_cache<U: IntoUrl>(&self, url: U, object: &JsonValue) {
-        let filepath = self.url_to_path(url, FILE_EXTENSION);
+    fn write_to_cache<U: IntoUrl>(&self, url: U, object: &JsonValue) -> Result<(), Box<Error>>{
+        let filepath = self.url_to_path(url, FILE_EXTENSION)?;
         println!("Writen to Cache: {}", filepath.display());
 
-        create_dir_all(filepath.parent().unwrap()).unwrap();
-        let mut file: File = File::create(filepath).unwrap();
+        create_dir_all(filepath.parent().unwrap())?;
+        let mut file: File = File::create(filepath)?;
 
-        object.write_pretty(&mut file, 4).unwrap();
+        object.write_pretty(&mut file, 4)?;
+        Ok(())
     }
 
     /// Parses the data of a single attribute of an object recursively and replaces embedded objects
@@ -210,7 +215,7 @@ impl<'a> OParlCache<'a> {
             }
         }
 
-        self.write_to_cache(target["id"].as_str().unwrap(), &target)
+        self.write_to_cache(target["id"].as_str().unwrap(), &target).unwrap();
     }
 
     /// Downloads a whole external list and saves the results to the cache
@@ -250,7 +255,7 @@ impl<'a> OParlCache<'a> {
         urls.append(&mut old_urls);
 
         // Get the urls that have already been retrieved when not using a modified_since
-        let old_urls_filepath = self.url_to_path(url, FILE_EXTENSION);
+        let old_urls_filepath = self.url_to_path(url, FILE_EXTENSION).unwrap();
         let mut urls_as_json = {
             if old_urls_filepath.exists() {
                 let mut old_urls_file = File::open(&old_urls_filepath).unwrap();
@@ -265,7 +270,7 @@ impl<'a> OParlCache<'a> {
         for i in urls {
             urls_as_json.push(i).unwrap();
         }
-        self.write_to_cache(url, &urls_as_json);
+        self.write_to_cache(url, &urls_as_json).unwrap();
 
         for i in external_list_adder.lock().unwrap().iter_mut() {
             if i.0 == url.into_url().unwrap().as_str() {
@@ -305,64 +310,69 @@ impl<'a> OParlCache<'a> {
 
     /// Loads the whole API to the cache or updates an existing cache
     /// This function does only do the loading saving and forwards the actual work
-    pub fn load_to_cache(&self) {
-        let entrypoint: Url = Url::from_str(self.entrypoint).unwrap();
-        let cache_status_filepath = self.url_to_path(entrypoint.as_str(), "").join(self.cache_status_file);
-        let external_list_adder: Arc<Mutex<Vec<(String, Option<String>)>>>;
+    pub fn load_to_cache(&self) -> Result<(), Box<Error>> {
+        let entrypoint: Url = Url::from_str(self.entrypoint)?;
+        let cache_status_filepath = self.url_to_path(entrypoint.as_str(), "")?.join(self.cache_status_file);
+        let external_list_adder: Vec<(String, Option<String>)>;
 
         if cache_status_filepath.exists() {
             // We have a cache, so let's load it
             println!("Cache found, updating...");
-            let mut cache_status_file = File::open(&cache_status_filepath).unwrap();
+            let mut cache_status_file = File::open(&cache_status_filepath)?;
             let mut read = String::new();
-            cache_status_file.read_to_string(&mut read).unwrap();
-            let known_external_lists = json::parse(&read).unwrap().members()
+            cache_status_file.read_to_string(&mut read)?;
+            let known_external_lists = json::parse(&read)?.members()
                 .map(|i| (i["url"].to_string(), Some(i["last_sync"].to_string())))
                 .collect::<Vec<(String, Option<String>)>>();
 
             println!("External lists found in cache: {}", known_external_lists.len());
-            external_list_adder = Arc::new(Mutex::new(known_external_lists));
+            external_list_adder = known_external_lists;
         } else {
             // We don't have a cache, so let's use an empty template
             println!("No cache found, initializing...");
-            create_dir_all(cache_status_filepath.parent().unwrap()).unwrap();
-            external_list_adder = Arc::new(Mutex::new(Vec::new()));
+            let err = "Could not create directory for the cache status file";
+            create_dir_all(cache_status_filepath.parent().ok_or(err)?)?;
+            external_list_adder = Vec::new();
         }
 
         println!("\nLoaded from cache:");
-        for i in external_list_adder.lock().unwrap().iter() {
+        for i in external_list_adder.iter() {
             println!("{}: {}", i.1.clone().unwrap_or("None".to_string()), i.0);
         }
         println!("");
 
+        let external_list_adder = Arc::new(Mutex::new(external_list_adder));
+
         // Download the entrypoint which is the System object
         // This will set the first external list, which is the body list
-        let mut system_object = download_json(entrypoint).unwrap();
+        let mut system_object = download_json(entrypoint)?;
         self.parse_object(&mut system_object, &external_list_adder.clone());
 
         // Here the actual work is done
         self.load_all_external_lists(&external_list_adder);
 
         // Write the results back to the cache
-        let mut cache_status_file: File = File::create(&cache_status_filepath).unwrap();
+        let mut cache_status_file: File = File::create(&cache_status_filepath)?;
         let mut cache_status_json = JsonValue::new_array();
 
-        let external_list_adder = external_list_adder.lock().unwrap();
+        let external_list_adder = external_list_adder.lock().unwrap(); // TODO: Why does the questionmark cause a lifetime error here?
 
         for i in 0..external_list_adder.len() {
             cache_status_json.push(object! {
                 "url" => JsonValue::from(external_list_adder[i].0.clone()),
                 "last_sync" => JsonValue::from(external_list_adder[i].1.clone())
-            }).unwrap();
+            })?;
         }
 
-        cache_status_json.write_pretty(&mut cache_status_file, 4).unwrap();
+        cache_status_json.write_pretty(&mut cache_status_file, 4)?;
+        
+        Ok(())
     }
 
-    /// Retrieves a stored api response from the cache. Returns an io::Error if the was an error
-    /// reading the cache file
-    pub fn retrieve_from_cache<U: IntoUrl>(&self, url: U) -> Result<JsonValue, std::io::Error> {
-        let path = self.url_to_path(url, FILE_EXTENSION);
+    /// Retrieves a stored api response from the cache. Returns a boxed error if the url was invalid
+    /// or when there was an error reading the cache file
+    pub fn retrieve_from_cache<U: IntoUrl>(&self, url: U) -> Result<JsonValue, Box<Error>> {
+        let path = self.url_to_path(url, FILE_EXTENSION)?;
         let mut s = String::new();
         let mut file: File = File::open(path)?;
         file.read_to_string(&mut s)?;
