@@ -4,7 +4,7 @@
 extern crate oparl_cache;
 #[macro_use] extern crate clap;
 
-use oparl_cache::OParlCache;
+use oparl_cache::{Storage, Cacher};
 
 fn main() {
     let matches = clap_app!(OParl_Cache_Rust =>
@@ -21,8 +21,9 @@ fn main() {
     let schemadir = matches.value_of("schemadir").unwrap_or("/home/konsti/oparl/schema/");
     let cache_status_file = matches.value_of("cache_status_file").unwrap_or(oparl_cache::DEFAULT_CACHE_STATUS_FILE);
 
-    let cache = OParlCache::new(entrypoint, schemadir, cachedir, cache_status_file);
-    let status = cache.load_to_cache();
+    let storage = Storage::new(entrypoint, schemadir, cachedir, cache_status_file);
+    let cacher = Cacher::new(storage);
+    let status = cacher.load_to_cache();
 
     if let Err(err) = status {
         println!("✗ Loading failed: {}", err.description());

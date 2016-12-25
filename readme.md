@@ -1,22 +1,26 @@
 ## Rust OParl Cache
 
-This repository contains both a library and CLI tool written in rust for loading the contents of an OParl API 
-to an idiomatic file cache and to retrieve the cached files. Files provided by Paper are not downloaded. 
+[![Build Status](https://travis-ci.org/konstin/oparl-cache-rs.svg?branch=master)](https://travis-ci.org/konstin/oparl-cache-rs)
+
+This is both a library and a CLI tool for caching the whole contents of an [OParl API](https://oparl.org)
+This repository contains both a library and CLI written in rust for loading the contents of an OParl API 
+to a simple file cache and to retrieve the cached files. Note that the actual documents provided by Paper are not
+downloaded. 
 
 ## Usage
 
-You need rust and its package manager cargo first.
+Install rust and its package manager, cargo.
 
-You can then use the CLI with the following command:
+Build and run with the default settingss:
 
 ```bash
 cargo run
 ```
 
-To list all available options, run
+List all available options:
 
 ```bash
 cargo run -- --help
 ```
 
-To use this as a library, use the provided crate, which is called `òparl_cache`.
+To use this as a library, include the provided crate, which is called `òparl_cache`.

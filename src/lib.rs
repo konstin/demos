@@ -20,14 +20,14 @@
 //! # Examples
 //!
 //! ```rust
-//! use oparl_cache::OParlCache;
+//! use oparl_cache::{Storage, Cacher};
 //!
-//! let cache = OParlCache::new(
+//! let cache = Cacher::new(Storage::new(
 //!     "http://localhost:8080/oparl/v1.0/",
 //!     "/home/konsti/oparl/schema/",
 //!     "/home/konsti/cache-rust/",
 //!     oparl_cache::DEFAULT_CACHE_STATUS_FILE
-//! );
+//! ));
 //! cache.load_to_cache();
 //! ```
 
@@ -39,15 +39,17 @@ extern crate crossbeam;
 
 mod external_list;
 mod oparl_cache;
+mod access;
+mod cacher;
 
-pub use oparl_cache::OParlCache;
 pub use external_list::ExternalList;
+pub use oparl_cache::Storage;
+pub use access::Access;
+pub use cacher::Cacher;
 
 #[cfg(test)]
 mod test;
 
 pub const DEFAULT_CACHE_STATUS_FILE: &'static str = "cache_status.json";
 pub const FILE_EXTENSION: &'static str = ".json";
-
-
 
