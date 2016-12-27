@@ -1,7 +1,7 @@
-
+use std::convert::From;
 use std::error::Error;
-use std::io::Read;
 use std::fs::{File, create_dir_all};
+use std::io::Read;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
@@ -23,7 +23,7 @@ pub struct Cacher<'a> {
 
 impl<'a> Cacher<'a> {
     pub fn new(storage: Storage) -> Cacher {
-        Cacher {storage: storage}
+        Cacher { storage: storage }
     }
 
     fn add_external_list(&self, url: String, last_update: Option<String>,
@@ -39,7 +39,7 @@ impl<'a> Cacher<'a> {
 
     /// Writes JSON to the path corresponding with the url. This will be an object and its id in the
     /// most cases
-    pub fn write_to_cache<U: IntoUrl>(&self, url: U, object: &JsonValue) -> Result<(), Box<Error>>{
+    pub fn write_to_cache<U: IntoUrl>(&self, url: U, object: &JsonValue) -> Result<(), Box<Error>> {
         let filepath = self.storage.url_to_path(url, FILE_EXTENSION)?;
         println!("Writen to Cache: {}", filepath.display());
 
@@ -53,7 +53,7 @@ impl<'a> Cacher<'a> {
     /// Parses the data of a single attribute of an object recursively and replaces embedded objects
     /// by the id. The embedded objects are them parsed by themselves
     pub fn parse_entry(&self, key: &str, entry: &mut JsonValue, entry_def: &JsonValue,
-                   external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
+                       external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
         if entry_def["type"] == "array" {
             for mut i in entry.members_mut() {
                 let key = key.to_string() + "[" + &i.to_string() + "]";
@@ -80,7 +80,7 @@ impl<'a> Cacher<'a> {
     /// Determines the corresponding schema of an object, lets all it's attributes be parsed
     /// recursively and then writes the object to the cache
     pub fn parse_object(&self, target: &mut JsonValue,
-                    external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
+                        external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
         let let_binding = target["type"].to_string();
         let oparl_type = let_binding.split("/").last().unwrap();
         let spec_for_object = &self.storage.get_schema()[oparl_type]["properties"];
@@ -99,12 +99,13 @@ impl<'a> Cacher<'a> {
     /// If `last_sync` is given, the filter modified_since will be appended to the url
     /// `external_list_adder` allows adding external lists that were found when parsing this one
     pub fn parse_external_list<U: IntoUrl + Copy>(&self, url: U, last_sync: Option<String>,
-                                                  external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
+                                                  external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>)
+                                                  -> Result<(), Box<Error>> {
         // Taake the time before the downloading as the data can change while obtaining pages
         let this_sync = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
 
         let limit: Option<usize> = None;
-        let mut url_with_filters: Url = url.into_url().unwrap();
+        let mut url_with_filters: Url = url.into_url()?;
 
         if let Some(last_sync_time) = last_sync {
             // Add the modified_since filter
@@ -132,29 +133,31 @@ impl<'a> Cacher<'a> {
         urls.append(&mut old_urls);
 
         // Get the urls that have already been retrieved when not using a modified_since
-        let old_urls_filepath = self.storage.url_to_path(url, FILE_EXTENSION).unwrap();
+        let old_urls_filepath = self.storage.url_to_path(url, FILE_EXTENSION)?;
         let mut urls_as_json = {
             if old_urls_filepath.exists() {
-                let mut old_urls_file = File::open(&old_urls_filepath).unwrap();
+                let mut old_urls_file = File::open(&old_urls_filepath)?;
                 let mut read = String::new();
-                old_urls_file.read_to_string(&mut read).unwrap();
-                json::parse(&read).unwrap()
+                old_urls_file.read_to_string(&mut read)?;
+                json::parse(&read)?
             } else {
                 JsonValue::new_array()
             }
         };
 
         for i in urls {
-            urls_as_json.push(i).unwrap();
+            urls_as_json.push(i)?;
         }
-        self.write_to_cache(url, &urls_as_json).unwrap();
+        self.write_to_cache(url, &urls_as_json)?;
 
         for i in external_list_adder.lock().unwrap().iter_mut() {
-            if i.0 == url.into_url().unwrap().as_str() {
+            if i.0 == url.into_url()?.as_str() {
                 i.1 = Some(this_sync);
                 break;
             }
         };
+
+        Ok(())
     }
 
     /// Download and cache all external lists while adding those newly found in a fully parallelized
@@ -162,6 +165,8 @@ impl<'a> Cacher<'a> {
     /// The weird command order is due to the Mutex-locking which would otherwise dead-lock
     /// the child threads
     fn load_all_external_lists(&self, external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
+        let mut results = vec![];
+
         crossbeam::scope(|scope| {
             let mut i = 0;
             loop {
@@ -177,12 +182,26 @@ impl<'a> Cacher<'a> {
                     last_update = external_list_adder[i].1.clone();
                 }
                 let external_list_adder = external_list_adder.clone();
-                scope.spawn(move || {
-                    self.parse_external_list(&url, last_update, &external_list_adder);
-                });
+
+                let closure = move || -> Result<String, Box<Error + Send + Sync>> {
+                    let list_result = self.parse_external_list(&url, last_update, &external_list_adder);
+                    let sendable_and_typed: Result<(), Box<Error + Send + Sync>> = list_result.map_err(|err| From::from(err.description()));
+                    sendable_and_typed?;
+                    Ok(url)
+                };
+                results.push(scope.spawn(
+                    closure
+                ));
                 i += 1;
             }
         });
+
+        for thread in results {
+            match thread.join() {
+                Ok(url) => println!("Success: {}", url),
+                Err(err) => println!("Failed: {}", err),
+            }
+        }
     }
 
     /// Loads the whole API to the cache or updates an existing cache

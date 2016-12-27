@@ -4,10 +4,7 @@ use json;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use super::Storage;
-use super::Cacher;
-use super::Access;
-use super::external_list::ExternalList;
+use super::{Storage, Cacher, Access, ExternalList};
 
 fn storage<'a>() -> Storage<'a> {
         Storage::new(
@@ -102,7 +99,7 @@ fn parse_external_list() {
     let eurl = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
     let time = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
     let external_list_adder = Arc::new(Mutex::new(Vec::new()));
-    cacher().parse_external_list(eurl, Some(time), &external_list_adder);
+    cacher().parse_external_list(eurl, Some(time), &external_list_adder).unwrap();
     assert_eq!(*external_list_adder.lock().unwrap(), vec![]);
 }
 
