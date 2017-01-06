@@ -22,8 +22,7 @@ fn main() {
     let cache_status_file = matches.value_of("cache_status_file").unwrap_or(oparl_cache::DEFAULT_CACHE_STATUS_FILE);
 
     let storage = Storage::new(entrypoint, schemadir, cachedir, cache_status_file);
-    let cacher = Cacher::new(storage);
-    let status = cacher.load_to_cache();
+    let status = storage.load_to_cache();
 
     if let Err(err) = status {
         println!("✗ Loading failed: {}", err.description());

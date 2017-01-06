@@ -8,7 +8,8 @@ use hyper::Url;
 use hyper::client::IntoUrl;
 use hyper::error::ParseError;
 
-/// The definition of a cache for one OParl server
+/// The mapping of an OParl server to a cache
+#[derive(Clone)]
 pub struct Storage<'a> {
     entrypoint: &'a str,
     schema: JsonValue,
@@ -58,7 +59,7 @@ impl<'a> Storage<'a> {
     /// Takes an `url` and returns the corresponding cache path
     /// <cachedir>/<scheme>[:<host>][:<port>][/<path>]<suffix>
     /// Returns an error if the given url is not a valid url
-    pub fn url_to_path<U: IntoUrl>(&self, url: U, suffix: &str) -> Result<PathBuf, ParseError>{
+    pub fn url_to_path<U: IntoUrl>(&self, url: U, suffix: &str) -> Result<PathBuf, ParseError> {
         let mut url: Url = url.into_url()?;
 
         // Remove the oparl filters

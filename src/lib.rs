@@ -3,33 +3,53 @@
 //! Downloads the contents of an OParl API into a file based cache, allowing easy retrieval and
 //! incremental cache updates
 //!
-//! # Usage
-//! Create an instance of the `OParlCache` struct with the url of the OParl entrypoint. Use the
-//! `load_to_cache()` method to download the contents of the API. You can the retrieve objects using
-//! `get_from_cache(id)`. Update by calling `load_to_cache()`. Note that embedded objects are
-//! stripped out and replaced by their id, by which you can retrieve them.
+//! Note that there is a CLI so you can `cargo run` this project. See `bin/main.rs` or the main
+//! crate for more information
 //!
-//! Note that there is a CLI so you can `cargo run` this project. See `bin/main.rs` for more details
+//! # Usage
+//!
+//! First, load the server's contents to the cache with an instance of `Storage`. It describes which
+//! server should be stored in which directory. As it implements the `Cacher` trait, you can
+//! call `load_to_cache` on it:
+//!
+//! ```rust,no_run
+//! use oparl_cache::{Storage, Cacher, Access};
+//!
+//! let storage = Storage::new(
+//!     "https://oparl.example.org/v1",
+//!     "/home/username/oparl/schema/",
+//!     "/home/username/.cache/oparl",
+//!     oparl_cache::DEFAULT_CACHE_STATUS_FILE
+//! );
+//! storage.load_to_cache().unwrap();
+//! ```
+//!
+//! Now the whole OParl API has been loaded to the cache! Now use the `Access` trait to retrieve
+//! objects:
+//!
+//! ```rust,no_run
+//! # use oparl_cache::{Storage, Cacher, Access};
+//! #
+//! # let storage = Storage::new(
+//! #     "https://oparl.example.org/v1",
+//! #     "/home/username/oparl/schema/",
+//! #     "/home/username/.cache/oparl",
+//! #     oparl_cache::DEFAULT_CACHE_STATUS_FILE
+//! # );
+//! storage.get("https://oparl.example.org/v1/body/0/person/42_douglas_adams");
+//! ```
+//!
+//! If you want an incremental cache update, just do `cacher.load_to_cache()` again.
 //!
 //! # Implementation
-//! The cache folder contains a file called "cache_status.json" with an entry for each known OParl
-//! server. An entry contains the external lists of the server with the date of last update of that
-//! list. All OParl entities are stored in a file in the cache folder whose path is a reformatted
-//! version of the url. For external lists only the ids of the elements are stored.
 //!
-//! # Examples
+//! The cache directory contains a folder for each server, with each of these folder folder
+//! containing a file with the last successfull update of an external list. All OParl entities are
+//! stored in that folder, while the exact location is a reformatted version of the url.
+//! For external lists only the ids of the elements are stored.
 //!
-//! ```rust
-//! use oparl_cache::{Storage, Cacher};
-//!
-//! let cache = Cacher::new(Storage::new(
-//!     "http://localhost:8080/oparl/v1.0/",
-//!     "/home/konsti/oparl/schema/",
-//!     "/home/konsti/cache-rust/",
-//!     oparl_cache::DEFAULT_CACHE_STATUS_FILE
-//! ));
-//! cache.load_to_cache();
-//! ```
+
+//#![warn(missing_docs)]
 
 #[macro_use]
 extern crate json;
@@ -38,18 +58,18 @@ extern crate chrono;
 extern crate crossbeam;
 
 mod external_list;
-mod oparl_cache;
+mod storage;
 mod access;
 mod cacher;
+mod constants;
 
 pub use external_list::ExternalList;
-pub use oparl_cache::Storage;
+pub use storage::Storage;
 pub use access::Access;
 pub use cacher::Cacher;
+pub use constants::*;
 
 #[cfg(test)]
 mod test;
 
-pub const DEFAULT_CACHE_STATUS_FILE: &'static str = "cache_status.json";
-pub const FILE_EXTENSION: &'static str = ".json";
 

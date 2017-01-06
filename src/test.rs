@@ -4,23 +4,15 @@ use json;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use super::{Storage, Cacher, Access, ExternalList};
+use super::*;
 
 fn storage<'a>() -> Storage<'a> {
-        Storage::new(
-            "http://localhost:8080/oparl/v1.0",
-            "/home/konsti/oparl/schema/",
-            "/home/konsti/cache-rust/",
-            super::DEFAULT_CACHE_STATUS_FILE
-        )
-}
-
-fn cacher<'a>() -> Cacher<'a> {
-    Cacher::new(storage())
-}
-
-fn access<'a>() -> Access<'a> {
-    Access::new(storage())
+    Storage::new(
+        "http://localhost:8080/oparl/v1.0",
+        "/home/konsti/oparl/schema/",
+        "/home/konsti/cache-rust/",
+        DEFAULT_CACHE_STATUS_FILE
+    )
 }
 
 #[test]
@@ -40,7 +32,6 @@ fn parse_object_extract_internal() {
         "created" => "2016-05-02T00:00:00+02:00",
         "modified" => "2016-05-02T00:00:00+02:00"
     };
-
     let expected_output = object! {
         "id" => "http://localhost:8080/oparl/v1.0/paper/2",
         "type" => "https://schema.oparl.org/1.0/Paper",
@@ -50,9 +41,8 @@ fn parse_object_extract_internal() {
         "created" => "2016-05-02T00:00:00+02:00",
         "modified" => "2016-05-02T00:00:00+02:00"
     };
-
     let external_list_adder = Arc::new(Mutex::new(Vec::new()));
-    cacher().parse_object(&mut input, &external_list_adder);
+    storage().parse_object(&mut input, &external_list_adder);
     assert_eq!(input, expected_output);
     assert_eq!(*external_list_adder.lock().unwrap(), vec![]);
 }
@@ -81,16 +71,15 @@ fn parse_object_find_external_list() {
     // Create a deep copy and replace the embedded object by its id
     let mut expected_output = json::parse(&input.dump()).unwrap();
     expected_output["legislativeTerm"][0] = expected_output["legislativeTerm"][0]["id"].take();
-
     let external_list_adder = Arc::new(Mutex::new(Vec::new()));
-    cacher().parse_object(&mut input, &external_list_adder);
+    storage().parse_object(&mut input, &external_list_adder);
 
     assert_eq!(input, expected_output);
     assert_eq!(*external_list_adder.lock().unwrap(), vec![
-    ("http://localhost:8080/oparl/v1.0/body/0/list/organization".to_string(), None),
-    ("http://localhost:8080/oparl/v1.0/body/0/list/person".to_string(), None),
-    ("http://localhost:8080/oparl/v1.0/body/0/list/meeting".to_string(), None),
-    ("http://localhost:8080/oparl/v1.0/body/0/list/paper".to_string(), None),
+        ("http://localhost:8080/oparl/v1.0/body/0/list/organization".to_string(), None),
+        ("http://localhost:8080/oparl/v1.0/body/0/list/person".to_string(), None),
+        ("http://localhost:8080/oparl/v1.0/body/0/list/meeting".to_string(), None),
+        ("http://localhost:8080/oparl/v1.0/body/0/list/paper".to_string(), None),
     ]);
 }
 
@@ -99,7 +88,7 @@ fn parse_external_list() {
     let eurl = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
     let time = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
     let external_list_adder = Arc::new(Mutex::new(Vec::new()));
-    cacher().parse_external_list(eurl, Some(time), &external_list_adder).unwrap();
+    storage().parse_external_list(eurl, Some(time), &external_list_adder).unwrap();
     assert_eq!(*external_list_adder.lock().unwrap(), vec![]);
 }
 
@@ -114,13 +103,11 @@ fn external_list() {
         "http://localhost:8080/oparl/v1.0/paper/6",
         "http://localhost:8080/oparl/v1.0/paper/7",
     ];
-
     let eurl = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
     let list = ExternalList::new(eurl.to_string());
     let ids = list.map(|i| i["id"].to_owned()).collect::<Vec<_>>();
     assert_eq!(ids, expected_ids);
 }
-
 
 fn single_url_to_path(url: &str, query_string: &str, path: &str) {
     assert_eq! (storage().url_to_path((url.to_string() + query_string).as_str(), ".json").unwrap(), Path::new(path));
@@ -131,7 +118,6 @@ fn single_url_to_path(url: &str, query_string: &str, path: &str) {
 fn url_to_path() {
     let cache_status_file = "/home/konsti/cache-rust/http:localhost:8080/oparl/v1.0/cache-status.json";
     assert_eq! (storage().url_to_path("http://localhost:8080/oparl/v1.0", "").unwrap().join("cache-status.json"), Path::new(cache_status_file));
-
     single_url_to_path("https://example.tld:8080/oparl/v1.0/paper/1", "", "/home/konsti/cache-rust/https:example.tld:8080/oparl/v1.0/paper/1.json");
     single_url_to_path("https://example.tld/oparl/v1.0/paper/1", "", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0/paper/1.json");
     single_url_to_path("https://example.tld/oparl/v1.0", "", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0.json");
