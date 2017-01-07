@@ -11,6 +11,7 @@ use FILE_EXTENSION;
 
 /// Allows accessing the cache of an OParl server
 pub trait Access {
+    /// Retrieves a stored api response from the cache.
     fn get<U: IntoUrl>(&self, url: U) -> Result<JsonValue, Box<Error>>;
 }
 

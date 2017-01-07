@@ -8,12 +8,13 @@ use std::convert::From;
 
 use json::JsonValue;
 use hyper::client::IntoUrl;
+use hyper::Url;
 
 /// Helper function to download an object and return it as parsed json
-pub fn download_json<U: IntoUrl + Clone>(url: U) -> Result<JsonValue, Box<Error>> {
+pub fn download_json(url: Url) -> Result<JsonValue, Box<Error>> {
     let client = hyper::Client::new();
-    let mut res: hyper::client::Response = client.get(url.clone()).send()?;
-    println!("Loaded: {:?}", url.into_url());
+    let mut res: hyper::client::Response = client.get(url).send()?;
+    println!("Loaded: {:?}", res.url);
     let mut json_string = String::new();
     res.read_to_string(&mut json_string)?;
     Ok(json::parse(&json_string)?)
@@ -25,7 +26,7 @@ pub fn download_json<U: IntoUrl + Clone>(url: U) -> Result<JsonValue, Box<Error>
 #[derive(Debug)]
 pub struct ExternalList {
     /// Points to the url of the current or, if the current page is exhausted, to the next one
-    url: String,
+    url: Url,
     /// Before and after the download, this will be None.
     /// During a successfull download, this will be Some(Ok(JsonValue))
     /// If any request has failed for any reason, this will be Some(Err(_))
@@ -33,7 +34,8 @@ pub struct ExternalList {
 }
 
 impl ExternalList {
-    pub fn new(url: String) -> ExternalList {
+    /// Constructs a new `ExternalList`
+    pub fn new(url: Url) -> ExternalList {
         ExternalList { url: url, response: None }
     }
 }
@@ -55,7 +57,7 @@ impl Iterator for ExternalList {
                     swap_partner
                 },
                 None => {
-                    download_json(&self.url)
+                    download_json(self.url.clone())
                 },
             }
         };
@@ -65,7 +67,7 @@ impl Iterator for ExternalList {
             if response["data"].len() == 0 {
                 // Check wether this page is exhausted
                 if response["links"].entries().any(|(x, _)| x == "next") {
-                    self.url = response["links"]["next"].to_string();
+                    self.url = response["links"]["next"].as_str().unwrap().into_url().unwrap();
                     load_required = true;
                 } else {
                     return None; // List ended succesfully
@@ -74,7 +76,7 @@ impl Iterator for ExternalList {
         }
 
         if load_required {
-            response_some = download_json(&self.url);
+            response_some = download_json(self.url.clone());
         }
 
         let return_value = match response_some {
@@ -95,5 +97,42 @@ impl Iterator for ExternalList {
         mem::swap(&mut self.response, &mut x);
 
         return_value
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use ::test::storage;
+    use cacher::Cacher;
+
+    use chrono::{Local};
+
+    use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn parse_external_list() {
+        let eurl = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
+        let time = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
+        let external_list_adder = Arc::new(Mutex::new(Vec::new()));
+        storage().parse_external_list(eurl, Some(time), &external_list_adder).unwrap();
+        assert_eq!(*external_list_adder.lock().unwrap(), vec![]);
+    }
+
+    #[test]
+    fn external_list() {
+        let expected_ids = [
+            "http://localhost:8080/oparl/v1.0/paper/1",
+            "http://localhost:8080/oparl/v1.0/paper/2",
+            "http://localhost:8080/oparl/v1.0/paper/3",
+            "http://localhost:8080/oparl/v1.0/paper/4",
+            "http://localhost:8080/oparl/v1.0/paper/5",
+            "http://localhost:8080/oparl/v1.0/paper/6",
+            "http://localhost:8080/oparl/v1.0/paper/7",
+        ];
+        let eurl = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
+        let list = ExternalList::new(eurl.into_url().unwrap());
+        let ids = list.map(|i| i["id"].to_owned()).collect::<Vec<_>>();
+        assert_eq!(ids, expected_ids);
     }
 }

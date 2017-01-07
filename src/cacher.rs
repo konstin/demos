@@ -2,7 +2,6 @@ use std::convert::From;
 use std::error::Error;
 use std::fs::{File, create_dir_all};
 use std::io::Read;
-use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use crossbeam;
@@ -28,7 +27,7 @@ pub trait Cacher {
 }
 
 impl<'a> Storage<'a> {
-    pub fn add_external_list(&self, url: String, last_update: Option<String>,
+    fn add_external_list(&self, url: String, last_update: Option<String>,
                          external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
         let mut external_list_adder = external_list_adder.lock().unwrap();
         if external_list_adder.iter().all(|i| url != i.0) {
@@ -41,11 +40,11 @@ impl<'a> Storage<'a> {
 
     /// Writes JSON to the path corresponding with the url. This will be an object and its id in the
     /// most cases
-    pub fn write_to_cache<U: IntoUrl>(&self, url: U, object: &JsonValue) -> Result<(), Box<Error>> {
+    fn write_to_cache<U: IntoUrl>(&self, url: U, object: &JsonValue) -> Result<(), Box<Error>> {
         let filepath = self.url_to_path(url, FILE_EXTENSION)?;
         println!("Writen to Cache: {}", filepath.display());
 
-        create_dir_all(filepath.parent().unwrap())?;
+        create_dir_all(filepath.parent().ok_or("Invalid cachepath for file")?)?;
         let mut file: File = File::create(filepath)?;
 
         object.write_pretty(&mut file, 4)?;
@@ -54,7 +53,7 @@ impl<'a> Storage<'a> {
 
     /// Parses the data of a single attribute of an object recursively and replaces embedded objects
     /// by the id. The embedded objects are them parsed by themselves
-    pub fn parse_entry(&self, key: &str, entry: &mut JsonValue, entry_def: &JsonValue,
+    fn parse_entry(&self, key: &str, entry: &mut JsonValue, entry_def: &JsonValue,
                    external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
         if entry_def["type"] == "array" {
             for mut i in entry.members_mut() {
@@ -81,7 +80,7 @@ impl<'a> Storage<'a> {
 
     /// Determines the corresponding schema of an object, lets all it's attributes be parsed
     /// recursively and then writes the object to the cache
-    pub fn parse_object(&self, target: &mut JsonValue,
+    fn parse_object(&self, target: &mut JsonValue,
                     external_list_adder: &Arc<Mutex<Vec<(String, Option<String>)>>>) {
         let let_binding = target["type"].to_string();
         let oparl_type = let_binding.split("/").last().unwrap();
@@ -160,7 +159,7 @@ impl<'a> Cacher for Storage<'a> {
             url_with_filters.query_pairs_mut().append_pair("modified_since", &last_sync_time).finish();
         }
 
-        let elist = ExternalList::new(url_with_filters.to_string());
+        let elist = ExternalList::new(Url::parse(url_with_filters.as_str())?);
 
         let mut urls = Vec::new();
 
@@ -211,8 +210,7 @@ impl<'a> Cacher for Storage<'a> {
     /// Loads the whole API to the cache or updates an existing cache
     /// This function does only do the loading saving and forwards the actual work
     fn load_to_cache(&self) -> Result<(), Box<Error>> {
-        let entrypoint: Url = Url::from_str(self.get_entrypoint())?;
-        let cache_status_filepath = self.url_to_path(entrypoint.as_str(), "")?
+        let cache_status_filepath = self.url_to_path(self.get_entrypoint().clone(), "")?
             .join(self.get_cache_status_file());
         let external_list_adder: Vec<(String, Option<String>)>;
 
@@ -246,7 +244,7 @@ impl<'a> Cacher for Storage<'a> {
 
         // Download the entrypoint which is the System object
         // This will set the first external list, which is the body list
-        let mut system_object = download_json(entrypoint)?;
+        let mut system_object = download_json(self.get_entrypoint().clone())?;
         self.parse_object(&mut system_object, &external_list_adder.clone());
 
         // Here the actual work is done
@@ -268,5 +266,79 @@ impl<'a> Cacher for Storage<'a> {
         cache_status_json.write_pretty(&mut cache_status_file, 4)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use ::test::storage;
+
+    #[test]
+    fn parse_object_extract_internal() {
+        let mut input = object! {
+            "id" => "http://localhost:8080/oparl/v1.0/paper/2",
+            "type" => "https://schema.oparl.org/1.0/Paper",
+            "auxiliaryFile" => array![
+                object!{
+                  "id" => "http://localhost:8080/oparl/v1.0/file/2",
+                  "type" => "https://schema.oparl.org/1.0/File",
+                  "accessUrl" => "http://localhost:8080/fileaccess/access/2",
+                  "created" => "2016-05-02T19:53:08+02:00",
+                  "modified" => "2016-05-02T19:53:08+02:00"
+                }
+            ],
+            "created" => "2016-05-02T00:00:00+02:00",
+            "modified" => "2016-05-02T00:00:00+02:00"
+        };
+        let expected_output = object! {
+            "id" => "http://localhost:8080/oparl/v1.0/paper/2",
+            "type" => "https://schema.oparl.org/1.0/Paper",
+            "auxiliaryFile" => array! [
+                "http://localhost:8080/oparl/v1.0/file/2"
+            ],
+            "created" => "2016-05-02T00:00:00+02:00",
+            "modified" => "2016-05-02T00:00:00+02:00"
+        };
+        let external_list_adder = Arc::new(Mutex::new(Vec::new()));
+        storage().parse_object(&mut input, &external_list_adder);
+        assert_eq!(input, expected_output);
+        assert_eq!(*external_list_adder.lock().unwrap(), vec![]);
+    }
+
+    #[test]
+    fn parse_object_find_external_list() {
+        let mut input = object! {
+            "id" => "http://localhost:8080/oparl/v1.0/body/0",
+            "type" => "https://schema.oparl.org/1.0/Body",
+            "legislativeTerm" => array! [
+                object! {
+                    "id" => "http://localhost:8080/oparl/v1.0/legislativeterm/0",
+                    "type" => "https://schema.oparl.org/1.0/LegislativeTerm",
+                    "name" => "Unbekannt"
+                }
+            ],
+            "organization" => "http://localhost:8080/oparl/v1.0/body/0/list/organization",
+            "person" => "http://localhost:8080/oparl/v1.0/body/0/list/person",
+            "meeting" => "http://localhost:8080/oparl/v1.0/body/0/list/meeting",
+            "paper" => "http://localhost:8080/oparl/v1.0/body/0/list/paper",
+            "web" => "http://localhost:8080/",
+            "created" => "2016-09-29T14:31:50+02:00",
+            "modified" => "2016-09-29T14:42:52+02:00"
+        };
+
+        // Create a deep copy and replace the embedded object by its id
+        let mut expected_output = json::parse(&input.dump()).unwrap();
+        expected_output["legislativeTerm"][0] = expected_output["legislativeTerm"][0]["id"].take();
+        let external_list_adder = Arc::new(Mutex::new(Vec::new()));
+        storage().parse_object(&mut input, &external_list_adder);
+
+        assert_eq!(input, expected_output);
+        assert_eq!(*external_list_adder.lock().unwrap(), vec![
+            ("http://localhost:8080/oparl/v1.0/body/0/list/organization".to_string(), None),
+            ("http://localhost:8080/oparl/v1.0/body/0/list/person".to_string(), None),
+            ("http://localhost:8080/oparl/v1.0/body/0/list/meeting".to_string(), None),
+            ("http://localhost:8080/oparl/v1.0/body/0/list/paper".to_string(), None),
+        ]);
     }
 }

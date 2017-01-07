@@ -21,8 +21,8 @@ fn main() {
     let schemadir = matches.value_of("schemadir").unwrap_or("/home/konsti/oparl/schema/");
     let cache_status_file = matches.value_of("cache_status_file").unwrap_or(oparl_cache::DEFAULT_CACHE_STATUS_FILE);
 
-    let storage = Storage::new(entrypoint, schemadir, cachedir, cache_status_file);
-    let status = storage.load_to_cache();
+    let status = Storage::new(entrypoint, schemadir, cachedir, cache_status_file)
+        .map(|x| x.load_to_cache());
 
     if let Err(err) = status {
         println!("✗ Loading failed: {}", err.description());

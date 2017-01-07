@@ -20,7 +20,7 @@
 //!     "/home/username/oparl/schema/",
 //!     "/home/username/.cache/oparl",
 //!     oparl_cache::DEFAULT_CACHE_STATUS_FILE
-//! );
+//! ).unwrap();
 //! storage.load_to_cache().unwrap();
 //! ```
 //!
@@ -35,7 +35,7 @@
 //! #     "/home/username/oparl/schema/",
 //! #     "/home/username/.cache/oparl",
 //! #     oparl_cache::DEFAULT_CACHE_STATUS_FILE
-//! # );
+//! # ).unwrap();
 //! storage.get("https://oparl.example.org/v1/body/0/person/42_douglas_adams");
 //! ```
 //!
@@ -49,7 +49,7 @@
 //! For external lists only the ids of the elements are stored.
 //!
 
-//#![warn(missing_docs)]
+#![warn(missing_docs)]
 
 #[macro_use]
 extern crate json;

@@ -1,6 +1,7 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::fs::File;
+use std::error::Error;
 
 use json;
 use json::JsonValue;
@@ -11,47 +12,52 @@ use hyper::error::ParseError;
 /// The mapping of an OParl server to a cache
 #[derive(Clone)]
 pub struct Storage<'a> {
-    entrypoint: &'a str,
+    entrypoint: Url,
     schema: JsonValue,
     cache_dir: &'a str,
     cache_status_file: &'a str
 }
 
 impl<'a> Storage<'a> {
-    pub fn new(entrypoint: &'a str, schema_dir: &'a str, cache_dir: &'a str,
-               cache_status_file: &'a str) -> Storage<'a> {
+    /// Creates a new `Storage`
+    pub fn new<U: IntoUrl>(entrypoint: U, schema_dir: &'a str, cache_dir: &'a str,
+               cache_status_file: &'a str) -> Result<Storage<'a>, Box<Error>> {
         // Load the schema
         let mut schema = JsonValue::new_array();
-        for i in Path::new(schema_dir).read_dir().unwrap() {
-            let mut f: File = File::open(i.unwrap().path()).unwrap();
+        for i in Path::new(schema_dir).read_dir()? {
+            let mut f: File = File::open(i?.path())?;
             let mut s = String::new();
-            f.read_to_string(&mut s).unwrap();
-            let x = json::parse(&s).unwrap();
+            f.read_to_string(&mut s)?;
+            let x = json::parse(&s)?;
             let y = x["title"].to_string();
             schema[y] = x;
         }
 
         assert_eq!(schema.len(), 12);
-        Storage {
-            entrypoint: entrypoint,
+        Ok(Storage {
+            entrypoint: entrypoint.into_url()?,
             schema: schema,
             cache_dir: cache_dir,
             cache_status_file: cache_status_file
-        }
+        })
     }
 
-    pub fn get_entrypoint(&self) -> &'a str {
-        self.entrypoint
+    /// Returns `entrypoint`
+    pub fn get_entrypoint(&self) -> &Url {
+        &self.entrypoint
     }
 
+    /// Returns `schema`
     pub fn get_schema(&self) -> &JsonValue {
         &self.schema
     }
 
+    /// Returns `cache_dir`
     pub fn get_cache_dir(&self) -> &'a str {
         self.cache_dir
     }
 
+    /// Returns `cache_status_file`
     pub fn get_cache_status_file(&self) -> &'a str {
         self.cache_status_file
     }
@@ -113,5 +119,27 @@ impl<'a> Storage<'a> {
         cachefile += suffix;
 
         Ok(Path::new(&cachefile).to_path_buf())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use ::test::storage;
+    use super::*;
+
+    fn single_url_to_path(url: &str, query_string: &str, path: &str) {
+        assert_eq! (storage().url_to_path((url.to_string() + query_string).as_str(), ".json").unwrap(), Path::new(path));
+        assert_eq! (storage().url_to_path((url.to_string() + "/" + query_string).as_str(), ".json").unwrap(), Path::new(path));
+    }
+
+    #[test]
+    fn url_to_path() {
+        let cache_status_file = "/home/konsti/cache-rust/http:localhost:8080/oparl/v1.0/cache-status.json";
+        assert_eq! (storage().url_to_path("http://localhost:8080/oparl/v1.0", "").unwrap().join("cache-status.json"), Path::new(cache_status_file));
+        single_url_to_path("https://example.tld:8080/oparl/v1.0/paper/1", "", "/home/konsti/cache-rust/https:example.tld:8080/oparl/v1.0/paper/1.json");
+        single_url_to_path("https://example.tld/oparl/v1.0/paper/1", "", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0/paper/1.json");
+        single_url_to_path("https://example.tld/oparl/v1.0", "", "/home/konsti/cache-rust/https:example.tld/oparl/v1.0.json");
+        single_url_to_path("https://example.tld", "", "/home/konsti/cache-rust/https:example.tld.json");
+        single_url_to_path("https://example.tld/api", "?modified_until=2016-05-03T00%3A00%3A00%2B02%3A00", "/home/konsti/cache-rust/https:example.tld/api.json");
     }
 }
