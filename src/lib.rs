@@ -8,38 +8,7 @@
 //!
 //! # Usage
 //!
-//! First, load the server's contents to the cache with an instance of `Storage`. It describes which
-//! server should be stored in which directory. As it implements the `Cacher` trait, you can
-//! call `load_to_cache` on it:
-//!
-//! ```rust,no_run
-//! use oparl_cache::{Storage, Cacher, Access};
-//!
-//! let storage = Storage::new(
-//!     "https://oparl.example.org/v1",
-//!     "/home/username/oparl/schema/",
-//!     "/home/username/.cache/oparl",
-//!     oparl_cache::DEFAULT_CACHE_STATUS_FILE
-//! ).unwrap();
-//! storage.load_to_cache().unwrap();
-//! ```
-//!
-//! Now the whole OParl API has been loaded to the cache! Now use the `Access` trait to retrieve
-//! objects:
-//!
-//! ```rust,no_run
-//! # use oparl_cache::{Storage, Cacher, Access};
-//! #
-//! # let storage = Storage::new(
-//! #     "https://oparl.example.org/v1",
-//! #     "/home/username/oparl/schema/",
-//! #     "/home/username/.cache/oparl",
-//! #     oparl_cache::DEFAULT_CACHE_STATUS_FILE
-//! # ).unwrap();
-//! storage.get("https://oparl.example.org/v1/body/0/person/42_douglas_adams");
-//! ```
-//!
-//! If you want an incremental cache update, just do `cacher.load_to_cache()` again.
+//! FIXME
 //!
 //! # Implementation
 //!
@@ -49,7 +18,8 @@
 //! For external lists only the ids of the elements are stored.
 //!
 
-#![warn(missing_docs)]
+//FIXME
+//#![warn(missing_docs)]
 
 #[macro_use]
 extern crate json;
@@ -57,17 +27,18 @@ extern crate hyper;
 extern crate chrono;
 extern crate crossbeam;
 
-mod external_list;
+mod file_storage;
+mod helper;
 mod storage;
-mod access;
-mod cacher;
 mod constants;
+mod server;
+mod external_list;
 
-pub use external_list::ExternalList;
-pub use storage::Storage;
-pub use access::Access;
-pub use cacher::Cacher;
+pub use file_storage::*;
+pub use storage::*;
 pub use constants::*;
+pub use server::*;
+pub use external_list::*;
 
 #[cfg(test)]
 mod test;

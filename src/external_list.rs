@@ -10,6 +10,7 @@ use json::JsonValue;
 use hyper::client::IntoUrl;
 use hyper::Url;
 
+/// FIXME: Remove me
 /// Helper function to download an object and return it as parsed json
 pub fn download_json(url: Url) -> Result<JsonValue, Box<Error>> {
     let client = hyper::Client::new();

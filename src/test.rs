@@ -3,11 +3,10 @@ use super::*;
 use hyper::client::IntoUrl;
 
 /// Helper for various tests
-pub fn storage<'a>() -> Storage<'a> {
-    Storage::new(
-        "http://localhost:8080/oparl/v1.0".into_url().unwrap(),
+pub fn storage<'a>() -> FileStorage<'a> {
+    FileStorage::new(
         "/home/konsti/oparl/schema/",
-        "/home/konsti/cache-rust/",
+        "/tmp/cache-rust/",
         DEFAULT_CACHE_STATUS_FILE
     ).unwrap()
 }

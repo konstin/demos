@@ -4,7 +4,9 @@
 extern crate oparl_cache;
 #[macro_use] extern crate clap;
 
-use oparl_cache::{Storage, Cacher};
+use oparl_cache::{FileStorage, CommonServer, Server, DEFAULT_CACHE_STATUS_FILE};
+//use oparl_cache::storage::Storage;
+use oparl_cache::Storage;
 
 fn main() {
     let matches = clap_app!(OParl_Cache_Rust =>
@@ -19,10 +21,11 @@ fn main() {
     let entrypoint = matches.value_of("entrypoint").unwrap_or("http://localhost:8080/oparl/v1.0/");
     let cachedir = matches.value_of("cachedir").unwrap_or("/home/konsti/cache-rust/");
     let schemadir = matches.value_of("schemadir").unwrap_or("/home/konsti/oparl/schema/");
-    let cache_status_file = matches.value_of("cache_status_file").unwrap_or(oparl_cache::DEFAULT_CACHE_STATUS_FILE);
+    let cache_status_file = matches.value_of("cache_status_file").unwrap_or(DEFAULT_CACHE_STATUS_FILE);
 
-    let status = Storage::new(entrypoint, schemadir, cachedir, cache_status_file)
-        .map(|x| x.load_to_cache());
+    let server = CommonServer::new(entrypoint).unwrap();
+    let storage = FileStorage::new(schemadir, cachedir, cache_status_file).unwrap();
+    let status = storage.cache(server);
 
     if let Err(err) = status {
         println!("✗ Loading failed: {}", err.description());
