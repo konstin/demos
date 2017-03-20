@@ -4,9 +4,7 @@
 extern crate oparl_cache;
 #[macro_use] extern crate clap;
 
-use oparl_cache::{FileStorage, CommonServer, Server, DEFAULT_CACHE_STATUS_FILE};
-//use oparl_cache::storage::Storage;
-use oparl_cache::Storage;
+use oparl_cache::{Cacher, FileStorage, CommonServer, Server, DEFAULT_CACHE_STATUS_FILE};
 
 fn main() {
     let matches = clap_app!(OParl_Cache_Rust =>

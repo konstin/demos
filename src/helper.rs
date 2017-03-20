@@ -3,64 +3,7 @@ use std::path::{Path, PathBuf};
 use hyper::Url;
 use hyper::error::ParseError;
 
-/// Takes an `url` and returns the corresponding cache path in the form
-/// <cachedir>/<scheme>[:<host>][:<port>][/<path>]<suffix>
-///
-/// Returns an error if the given url is not a valid url
-pub fn url_to_path(cachedir: String, url: &Url, suffix: &str) -> Result<PathBuf, ParseError> {
-    // Remove the oparl filters
-    // Those parameters shouldn't be parsed on anyway, but just in case we'll do this
-    let url_binding: Url = url.clone();
-    let query_without_filters = url_binding.query_pairs()
-        .filter(|&(ref arg_name, _)| arg_name != "modified_until")
-        .filter(|&(ref arg_name, _)| arg_name != "modified_since")
-        .filter(|&(ref arg_name, _)| arg_name != "created_since")
-        .filter(|&(ref arg_name, _)| arg_name != "created_until");
 
-    let mut url_clone = url.clone();
-    let url: &mut Url = url_clone.query_pairs_mut()
-        .clear()
-        .extend_pairs(query_without_filters)
-        .finish();
-
-    // Compute the path
-    // Folder
-    let mut cachefile = cachedir.clone();
-    // Schema and host
-    cachefile += url.scheme();
-
-    // Host
-    if let Some(host) = url.host_str() {
-        cachefile += ":";
-        cachefile += host;
-    }
-
-    // Port
-    if let Some(port) = url.port() {
-        cachefile += ":";
-        cachefile += &port.to_string();
-    }
-
-    // Path
-    let mut path = url.path().to_string();
-    if path.ends_with("/") {
-        path.pop(); // We have a file here, not a folder, dear url creators
-    };
-    cachefile += &path;
-
-    // Query
-    if let Some(query) = url.query() {
-        if query != "" {
-            cachefile += "?";
-            cachefile += query;
-        }
-    }
-
-    // File extension
-    cachefile += suffix;
-
-    Ok(Path::new(&cachefile).to_path_buf())
-}
 
 #[cfg(test)]
 mod test {

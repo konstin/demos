@@ -33,12 +33,14 @@ mod storage;
 mod constants;
 mod server;
 mod external_list;
+mod cacher;
 
 pub use file_storage::*;
 pub use storage::*;
 pub use constants::*;
 pub use server::*;
 pub use external_list::*;
+pub use cacher::*;
 
 #[cfg(test)]
 mod test;

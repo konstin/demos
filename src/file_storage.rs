@@ -1,6 +1,6 @@
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::fs::File;
+use std::fs::{File, create_dir_all};
 use std::error::Error;
 
 use json;
@@ -9,8 +9,9 @@ use hyper::Url;
 use hyper::client::IntoUrl;
 use hyper::error::ParseError;
 
-use helper::url_to_path;
 use constants::FILE_EXTENSION;
+use cacher::Cacher;
+use server::Server;
 
 /// The mapping of an OParl server to a cache
 #[derive(Clone)]
@@ -58,22 +59,62 @@ impl<'a> FileStorage<'a> {
         self.cache_status_file
     }
 
-    /// Takes an `url` and returns the corresponding cache path
+    /// Takes an `url` and returns the corresponding cache path in the form
     /// <cachedir>/<scheme>[:<host>][:<port>][/<path>]<suffix>
+    ///
     /// Returns an error if the given url is not a valid url
     pub fn url_to_path(&self, url: &Url, suffix: &str) -> Result<PathBuf, ParseError> {
-        url_to_path(self.cache_dir.to_string(), url, suffix)
-    }
+        // Remove the oparl filters
+        // Those parameters shouldn't be parsed on anyway, but just in case we'll do this
+        let url_binding: Url = url.clone();
+        let query_without_filters = url_binding.query_pairs()
+            .filter(|&(ref arg_name, _)| arg_name != "modified_until")
+            .filter(|&(ref arg_name, _)| arg_name != "modified_since")
+            .filter(|&(ref arg_name, _)| arg_name != "created_since")
+            .filter(|&(ref arg_name, _)| arg_name != "created_until");
 
-    /// Retrieves a stored api response from the cache. Returns a boxed error if the url was invalid
-    /// or when there was an error reading the cache file
-    fn get<U: IntoUrl>(&self, url: U) -> Result<JsonValue, Box<Error>> {
-        let path = self.url_to_path(&url.into_url()?, FILE_EXTENSION)?;
-        let mut s = String::new();
-        let mut file: File = File::open(path)?;
-        file.read_to_string(&mut s)?;
-        let json = json::from(s.as_str());
-        Ok(json)
+        let mut url_clone = url.clone();
+        let url: &mut Url = url_clone.query_pairs_mut()
+            .clear()
+            .extend_pairs(query_without_filters)
+            .finish();
+
+        // Compute the path
+        // Folder
+        let mut cachefile = self.cache_dir.to_string().clone();
+        // Schema and host
+        cachefile += url.scheme();
+
+        // Host
+        if let Some(host) = url.host_str() {
+            cachefile += ":";
+            cachefile += host;
+        }
+
+        // Port
+        if let Some(port) = url.port() {
+            cachefile += ":";
+            cachefile += &port.to_string();
+        }
+
+        // Path
+        let mut path = url.path().to_string();
+        if path.ends_with("/") {
+            path.pop(); // We have a file here, not a folder, dear url creators
+        };
+        cachefile += &path;
+
+        // Query
+        if let Some(query) = url.query() {
+            if query != "" {
+                cachefile += "?";
+                cachefile += query;
+            }
+        }
+
+        // File extension
+        cachefile += suffix;
+
+        Ok(Path::new(&cachefile).to_path_buf())
     }
 }
-
