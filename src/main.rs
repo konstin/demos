@@ -3,8 +3,11 @@
 
 extern crate oparl_cache;
 #[macro_use] extern crate clap;
+extern crate hyper;
 
-use oparl_cache::{Cacher, FileStorage, CommonServer, Server, DEFAULT_CACHE_STATUS_FILE};
+use hyper::client::IntoUrl;
+
+use oparl_cache::{Cacher, FileStorage, CommonServer, DEFAULT_CACHE_STATUS_FILE};
 
 fn main() {
     let matches = clap_app!(OParl_Cache_Rust =>
@@ -21,7 +24,16 @@ fn main() {
     let schemadir = matches.value_of("schemadir").unwrap_or("/home/konsti/oparl/schema/");
     let cache_status_file = matches.value_of("cache_status_file").unwrap_or(DEFAULT_CACHE_STATUS_FILE);
 
-    let server = CommonServer::new(entrypoint).unwrap();
+    let entrypoint = match entrypoint.into_url() {
+        Ok(ok) => ok,
+        Err(err) => {
+            println!("Invalid URL for the entrypoint: {}", entrypoint);
+            println!("Error: {}", err);
+            return
+        }
+    };
+
+    let server = CommonServer::new(entrypoint);
     let storage = FileStorage::new(schemadir, cachedir, cache_status_file).unwrap();
     let status = storage.cache(server);
 

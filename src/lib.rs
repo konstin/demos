@@ -28,7 +28,6 @@ extern crate chrono;
 extern crate crossbeam;
 
 mod file_storage;
-mod helper;
 mod storage;
 mod constants;
 mod server;
