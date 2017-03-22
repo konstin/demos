@@ -8,8 +8,8 @@ doc = false
 name = "oparl-cache"
 
 [dependencies]
-chrono = "0.2.25"
-clap = "2.18.0"
-crossbeam = "0.2.10"
-hyper = "0.9.12"
-json = "0.11.0"
+chrono = "^0.3.0"
+clap = "^2.21.0"
+crossbeam = "^0.2.0"
+hyper = "^0.10.0"
+json = "^0.11.0"

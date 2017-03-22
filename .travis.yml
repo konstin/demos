@@ -10,4 +10,4 @@ matrix:
     - rust: nightly
 
 script:
- - cargo build # TODO: Don't run it for now as we don't have a server yet
+ - cargo build # TODO: Don't run it for now as there's no http mocking yet
