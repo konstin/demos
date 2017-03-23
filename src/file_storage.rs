@@ -153,6 +153,7 @@ impl<'a> Cacher for FileStorage<'a> {
     fn cache<U: Server>(&self, server: U) -> Result<(), Box<Error>> {
         let cache_status_filepath = self.url_to_path(&server.get_entrypoint().clone(), "")?
             .join(self.get_cache_status_file());
+        println!("{}", &cache_status_filepath.display());
         let mut known_lists: Vec<(Url, Option<String>)>;
 
         if cache_status_filepath.exists() {
@@ -183,17 +184,16 @@ impl<'a> Cacher for FileStorage<'a> {
         }
         println!();
 
-        // Here the actual work is done
-        self.load_all_external_lists(server, &known_lists);
-
         // Write the results back to the cache
         let mut cache_status_file: File = File::create(&cache_status_filepath)?;
         let mut cache_status_json = JsonValue::new_array();
 
-        for i in known_lists {
+        // Here the actual work is done
+        let mut new_cache_status = self.load_all_external_lists(server, &known_lists);
+        for i in new_cache_status.drain(..) {
             cache_status_json.push(object! {
-                "url" => JsonValue::from(i.0.clone().into_string()),
-                "last_sync" => JsonValue::from(i.1.clone())
+                "url" => JsonValue::from(i.0.to_string()),
+                "last_sync" => JsonValue::from(i.1)
             })?;
         }
 
