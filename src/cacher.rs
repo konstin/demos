@@ -14,6 +14,7 @@ use storage::Storage;
 use external_list::ExternalList;
 
 /// The type of the messages send from the worker to main thread
+#[derive(Debug)]
 pub enum Message {
     List(Url),
     Done,

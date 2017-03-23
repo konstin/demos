@@ -110,37 +110,3 @@ impl Iterator for ExternalList {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-    use test::storage;
-    use cacher::Cacher;
-
-    use chrono::Local;
-
-    use std::sync::{Arc, Mutex};
-
-    #[test]
-    fn parse_external_list() {
-        let eurl = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
-        let time = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
-        let external_list_adder = Arc::new(Mutex::new(Vec::new()));
-        storage().parse_external_list(eurl, Some(time), &external_list_adder).unwrap();
-        assert_eq!(*external_list_adder.lock().unwrap(), vec![]);
-    }
-
-    #[test]
-    fn external_list() {
-        let expected_ids = ["http://localhost:8080/oparl/v1.0/paper/1",
-                            "http://localhost:8080/oparl/v1.0/paper/2",
-                            "http://localhost:8080/oparl/v1.0/paper/3",
-                            "http://localhost:8080/oparl/v1.0/paper/4",
-                            "http://localhost:8080/oparl/v1.0/paper/5",
-                            "http://localhost:8080/oparl/v1.0/paper/6",
-                            "http://localhost:8080/oparl/v1.0/paper/7"];
-        let eurl = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
-        let list = ExternalList::new(eurl.into_url().unwrap());
-        let ids = list.map(|i| i["id"].to_owned()).collect::<Vec<_>>();
-        assert_eq!(ids, expected_ids);
-    }
-}

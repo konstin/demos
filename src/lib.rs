@@ -40,6 +40,4 @@ pub use constants::*;
 pub use server::*;
 pub use external_list::*;
 pub use cacher::*;
-
-#[cfg(test)]
-mod test;
+pub use constants::*;
