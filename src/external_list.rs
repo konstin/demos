@@ -13,15 +13,16 @@ use reqwest::IntoUrl;
 /// FIXME: Remove me
 /// Helper function to download an object and return it as parsed json
 pub fn get_json(url: Url) -> Result<JsonValue, Box<Error>> {
-        println!("Loading: {:?}", &url);
-        let mut reponse = reqwest::get(url)?;
-        if !reponse.status().is_success() {
-            return Err(From::from(format!("Bad status code returned for request: {}", reponse.status())));
-        }
+    println!("Loading: {:?}", &url);
+    let mut reponse = reqwest::get(url)?;
+    if !reponse.status().is_success() {
+        return Err(From::from(format!("Bad status code returned for request: {}",
+                                      reponse.status())));
+    }
 
-        let mut json_string = String::new();
-        reponse.read_to_string(&mut json_string)?;
-        Ok(json::parse(&json_string)?)
+    let mut json_string = String::new();
+    reponse.read_to_string(&mut json_string)?;
+    Ok(json::parse(&json_string)?)
 }
 
 /// Exposes the objects of an eternal list as iterator
@@ -40,7 +41,10 @@ pub struct ExternalList {
 impl ExternalList {
     /// Constructs a new `ExternalList`
     pub fn new(url: Url) -> ExternalList {
-        ExternalList { url: url, response: None }
+        ExternalList {
+            url: url,
+            response: None,
+        }
     }
 }
 
@@ -60,9 +64,7 @@ impl Iterator for ExternalList {
                     mem::swap(remaining, &mut swap_partner);
                     swap_partner
                 }
-                None => {
-                    get_json(self.url.clone())
-                }
+                None => get_json(self.url.clone()),
             }
         };
 
@@ -71,7 +73,11 @@ impl Iterator for ExternalList {
             if response["data"].len() == 0 {
                 // Check wether this page is exhausted
                 if response["links"].entries().any(|(x, _)| x == "next") {
-                    self.url = response["links"]["next"].as_str().unwrap().into_url().unwrap();
+                    self.url = response["links"]["next"]
+                        .as_str()
+                        .unwrap()
+                        .into_url()
+                        .unwrap();
                     load_required = true;
                 } else {
                     return None; // List ended succesfully
@@ -107,10 +113,10 @@ impl Iterator for ExternalList {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ::test::storage;
+    use test::storage;
     use cacher::Cacher;
 
-    use chrono::{Local};
+    use chrono::Local;
 
     use std::sync::{Arc, Mutex};
 
@@ -125,15 +131,13 @@ mod test {
 
     #[test]
     fn external_list() {
-        let expected_ids = [
-            "http://localhost:8080/oparl/v1.0/paper/1",
-            "http://localhost:8080/oparl/v1.0/paper/2",
-            "http://localhost:8080/oparl/v1.0/paper/3",
-            "http://localhost:8080/oparl/v1.0/paper/4",
-            "http://localhost:8080/oparl/v1.0/paper/5",
-            "http://localhost:8080/oparl/v1.0/paper/6",
-            "http://localhost:8080/oparl/v1.0/paper/7",
-        ];
+        let expected_ids = ["http://localhost:8080/oparl/v1.0/paper/1",
+                            "http://localhost:8080/oparl/v1.0/paper/2",
+                            "http://localhost:8080/oparl/v1.0/paper/3",
+                            "http://localhost:8080/oparl/v1.0/paper/4",
+                            "http://localhost:8080/oparl/v1.0/paper/5",
+                            "http://localhost:8080/oparl/v1.0/paper/6",
+                            "http://localhost:8080/oparl/v1.0/paper/7"];
         let eurl = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
         let list = ExternalList::new(eurl.into_url().unwrap());
         let ids = list.map(|i| i["id"].to_owned()).collect::<Vec<_>>();

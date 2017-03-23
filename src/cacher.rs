@@ -16,7 +16,7 @@ use external_list::ExternalList;
 /// The type of the messages send from the worker to main thread
 pub enum Message {
     List(Url),
-    Done
+    Done,
 }
 
 type ListSender = Sender<Message>;
@@ -30,7 +30,10 @@ pub trait Cacher: Storage + Sync {
 
     /// Parses the data of a single attribute of an object recursively and replaces embedded objects
     /// by the id. The embedded objects are them parsed by themselves
-    fn parse_entry(&self, key: &str, entry: &mut JsonValue, entry_def: &JsonValue,
+    fn parse_entry(&self,
+                   key: &str,
+                   entry: &mut JsonValue,
+                   entry_def: &JsonValue,
                    add_list: ListSender) {
         if entry_def["type"] == "array" {
             for mut i in entry.members_mut() {
@@ -63,13 +66,22 @@ pub trait Cacher: Storage + Sync {
             }
         }
 
-        self.write_to_cache(&target["id"].as_str().unwrap().into_url().unwrap(), &target).unwrap();
+        self.write_to_cache(&target["id"]
+                                 .as_str()
+                                 .unwrap()
+                                 .into_url()
+                                 .unwrap(),
+                            &target)
+            .unwrap();
     }
 
     /// Downloads a whole external list and saves the results to the cache
     /// If `last_sync` is given, the filter modified_since will be appended to the url
     /// `add_list` allows adding external lists that were found when parsing this one
-    fn parse_external_list(&self, url: Url, last_sync: Option<String>, add_list: ListSender)
+    fn parse_external_list(&self,
+                           url: Url,
+                           last_sync: Option<String>,
+                           add_list: ListSender)
                            -> Result<(Url, Option<String>), Box<Error>> {
         // Take the time before the downloading as the data can change while obtaining pages
         let this_sync = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
@@ -80,7 +92,8 @@ pub trait Cacher: Storage + Sync {
 
         if let Some(last_sync_time) = last_sync {
             // Add the modified_since filter
-            url_with_filters.query_pairs_mut().append_pair("modified_since", &last_sync_time)
+            url_with_filters.query_pairs_mut()
+                .append_pair("modified_since", &last_sync_time)
                 .finish();
         }
 
@@ -104,7 +117,7 @@ pub trait Cacher: Storage + Sync {
         let mut old_urls = Vec::new();
         urls.append(&mut old_urls);
 
-        // Get the urls of the obejcts that have already been retrieved when not using a modified_since
+        // Get the the lists cached in the last run
         let mut urls_as_json = self.get(&url_with_filters).unwrap_or(JsonValue::new_array());
 
         if !urls_as_json.is_array() {
@@ -123,7 +136,9 @@ pub trait Cacher: Storage + Sync {
     /// function blocks until all threads have finished.
     /// The weird command order is due to the Mutex-locking which would otherwise dead-lock
     /// the child threads
-    fn load_all_external_lists<T: Server>(&self, server: T, known: &Vec<(Url, Option<String>)>)
+    fn load_all_external_lists<T: Server>(&self,
+                                          server: T,
+                                          known: &Vec<(Url, Option<String>)>)
                                           -> Vec<(Url, Option<String>)> {
         let mut thread_handles = vec![];
 
@@ -153,22 +168,16 @@ pub trait Cacher: Storage + Sync {
                         queued
                     } else {
                         match receive_list.recv_timeout(Duration::from_secs(10)) {
-                            Ok(Message::List(url)) => {
-                                (url, None)
-                            }
+                            Ok(Message::List(url)) => (url, None),
                             Ok(Message::Done) => {
                                 threadcounter -= 1;
-                                if threadcounter == 0 {
-                                    break
-                                } else {
-                                    continue
-                                }
+                                if threadcounter == 0 { break } else { continue }
                             }
                             Err(_) => {
                                 // Granted, this is no the optimal solution. But it's better than
                                 // nothing at all
                                 println!("No message from any worker. Have they hung up?");
-                                continue
+                                continue;
                             }
                         }
                     }

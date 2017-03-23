@@ -2,7 +2,8 @@
 //! Use `cargo run -- --help` to get information on the available options
 
 extern crate oparl_cache;
-#[macro_use] extern crate clap;
+#[macro_use]
+extern crate clap;
 extern crate reqwest;
 
 use reqwest::IntoUrl;
@@ -17,19 +18,21 @@ fn main() {
         (@arg schemadir: -s --schema "The path of the folder with the OParl schema")
         (@arg cache_status_file: --cachestatus "The file where the information concerning the \
                                                  cache status gets stored")
-    ).get_matches();
+    )
+            .get_matches();
 
     let entrypoint = matches.value_of("entrypoint").unwrap_or("http://localhost:8080/oparl/v1.0/");
     let cachedir = matches.value_of("cachedir").unwrap_or("/home/konsti/cache-rust/");
     let schemadir = matches.value_of("schemadir").unwrap_or("/home/konsti/oparl/schema/");
-    let cache_status_file = matches.value_of("cache_status_file").unwrap_or(DEFAULT_CACHE_STATUS_FILE);
+    let cache_status_file = matches.value_of("cache_status_file")
+        .unwrap_or(DEFAULT_CACHE_STATUS_FILE);
 
     let entrypoint = match entrypoint.into_url() {
         Ok(ok) => ok,
         Err(err) => {
             println!("Invalid URL for the entrypoint: {}", entrypoint);
             println!("Error: {}", err);
-            return
+            return;
         }
     };
 

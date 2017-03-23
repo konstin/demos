@@ -18,7 +18,7 @@ use storage::Storage;
 pub struct FileStorage<'a> {
     schema: JsonValue,
     cache_dir: &'a str,
-    cache_status_file: &'a str
+    cache_status_file: &'a str,
 }
 
 impl<'a> Storage for FileStorage<'a> {
@@ -55,8 +55,10 @@ impl<'a> Storage for FileStorage<'a> {
 
 impl<'a> FileStorage<'a> {
     /// Creates a new `Storage`
-    pub fn new(schema_dir: &'a str, cache_dir: &'a str,
-               cache_status_file: &'a str) -> Result<FileStorage<'a>, Box<Error>> {
+    pub fn new(schema_dir: &'a str,
+               cache_dir: &'a str,
+               cache_status_file: &'a str)
+               -> Result<FileStorage<'a>, Box<Error>> {
         // Load the schema
         let mut schema = JsonValue::new_array();
         for i in Path::new(schema_dir).read_dir()? {
@@ -70,10 +72,10 @@ impl<'a> FileStorage<'a> {
 
         assert_eq!(schema.len(), 12, "Expected 12 Schema files");
         Ok(FileStorage {
-            schema: schema,
-            cache_dir: cache_dir,
-            cache_status_file: cache_status_file
-        })
+               schema: schema,
+               cache_dir: cache_dir,
+               cache_status_file: cache_status_file,
+           })
     }
 
     /// Returns `cache_dir`
@@ -163,10 +165,10 @@ impl<'a> Cacher for FileStorage<'a> {
             cache_status_file.read_to_string(&mut read)?;
             known_lists = vec![];
             for i in json::parse(&read)?.members() {
-                known_lists.push((
-                    i["url"].as_str().ok_or("invalid cache status file")?.into_url()?,
-                    Some(i["last_sync"].to_string())
-                ));
+                known_lists.push((i["url"].as_str()
+                                      .ok_or("invalid cache status file")?
+                                      .into_url()?,
+                                  Some(i["last_sync"].to_string())));
             }
             println!("External lists found in cache: {}", known_lists.len());
         } else {
@@ -205,7 +207,7 @@ impl<'a> Cacher for FileStorage<'a> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use ::test::storage;
+    use test::storage;
     use constants::FILE_EXTENSION;
 
     #[test]
@@ -268,29 +270,47 @@ mod test {
         storage().parse_object(&mut input, &add_list);
 
         assert_eq!(input, expected_output);
-        assert_eq!(receive_list.iter().collect(), vec![
-            ("http://localhost:8080/oparl/v1.0/body/0/list/organization".to_string(), None),
-            ("http://localhost:8080/oparl/v1.0/body/0/list/person".to_string(), None),
-            ("http://localhost:8080/oparl/v1.0/body/0/list/meeting".to_string(), None),
-            ("http://localhost:8080/oparl/v1.0/body/0/list/paper".to_string(), None),
-        ]);
+        assert_eq!(receive_list.iter().collect(),
+                   vec![("http://localhost:8080/oparl/v1.0/body/0/list/organization".to_string(),
+                         None),
+                        ("http://localhost:8080/oparl/v1.0/body/0/list/person".to_string(), None),
+                        ("http://localhost:8080/oparl/v1.0/body/0/list/meeting".to_string(),
+                         None),
+                        ("http://localhost:8080/oparl/v1.0/body/0/list/paper".to_string(), None)]);
     }
 
     fn for_one(url: &str, query_string: &str, path: &str) {
         let x = ((url.to_string() + query_string).as_str(), ".json").into_url().unwrap();
-        assert_eq! (url_to_path("/home/konsti/oparl/schema/", &x, FILE_EXTENSION).unwrap(), Path::new(path));
+        assert_eq!(url_to_path("/home/konsti/oparl/schema/", &x, FILE_EXTENSION).unwrap(),
+                   Path::new(path));
         let y = ((url.to_string() + "/" + query_string).as_str(), ".json").into_url().unwrap();
-        assert_eq! (url_to_path("/home/konsti/oparl/schema/", &y, FILE_EXTENSION).unwrap(), Path::new(path));
+        assert_eq!(url_to_path("/home/konsti/oparl/schema/", &y, FILE_EXTENSION).unwrap(),
+                   Path::new(path));
     }
 
     #[test]
     fn test_url_to_path() {
         let cache_status_file = "/tmp/cache-rust/http:localhost:8080/oparl/v1.0/cache-status.json";
-        assert_eq! (url_to_path("/home/konsti/oparl/schema/", &"http://localhost:8080/oparl/v1.0".into_url().unwrap(), "").unwrap().join("cache-status.json"), Path::new(cache_status_file));
-        for_one("https://example.tld:8080/oparl/v1.0/paper/1", "", "/tmp/cache-rust/https:example.tld:8080/oparl/v1.0/paper/1.json");
-        for_one("https://example.tld/oparl/v1.0/paper/1", "", "/tmp/cache-rust/https:example.tld/oparl/v1.0/paper/1.json");
-        for_one("https://example.tld/oparl/v1.0", "", "/tmp/cache-rust/https:example.tld/oparl/v1.0.json");
-        for_one("https://example.tld", "", "/tmp/cache-rust/https:example.tld.json");
-        for_one("https://example.tld/api", "?modified_until=2016-05-03T00%3A00%3A00%2B02%3A00", "/tmp/cache-rust/https:example.tld/api.json");
+        assert_eq!(url_to_path("/home/konsti/oparl/schema/",
+                               &"http://localhost:8080/oparl/v1.0".into_url().unwrap(),
+                               "")
+                           .unwrap()
+                           .join("cache-status.json"),
+                   Path::new(cache_status_file));
+        for_one("https://example.tld:8080/oparl/v1.0/paper/1",
+                "",
+                "/tmp/cache-rust/https:example.tld:8080/oparl/v1.0/paper/1.json");
+        for_one("https://example.tld/oparl/v1.0/paper/1",
+                "",
+                "/tmp/cache-rust/https:example.tld/oparl/v1.0/paper/1.json");
+        for_one("https://example.tld/oparl/v1.0",
+                "",
+                "/tmp/cache-rust/https:example.tld/oparl/v1.0.json");
+        for_one("https://example.tld",
+                "",
+                "/tmp/cache-rust/https:example.tld.json");
+        for_one("https://example.tld/api",
+                "?modified_until=2016-05-03T00%3A00%3A00%2B02%3A00",
+                "/tmp/cache-rust/https:example.tld/api.json");
     }
 }

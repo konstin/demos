@@ -15,7 +15,7 @@ pub trait Server {
 
 /// A OParl server that is defined by its entrypoint url
 pub struct CommonServer {
-    entrypoint: Url
+    entrypoint: Url,
 }
 
 impl CommonServer {
@@ -30,7 +30,8 @@ impl Server for CommonServer {
         println!("Loading: {:?}", &url);
         let mut reponse = reqwest::get(url)?;
         if !reponse.status().is_success() {
-            return Err(From::from(format!("Bad status code returned for request: {}", reponse.status())));
+            return Err(From::from(format!("Bad status code returned for request: {}",
+                                          reponse.status())));
         }
 
         let mut json_string = String::new();
