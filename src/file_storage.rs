@@ -90,8 +90,6 @@ impl<'a> FileStorage<'a> {
 
     /// Takes an `url` and returns the corresponding cache path in the form
     /// <cachedir>/<scheme>[:<host>][:<port>][/<path>]<suffix>
-    ///
-    /// Returns an error if the given url is not a valid url
     pub fn url_to_path(&self, url: &Url, suffix: &str) -> PathBuf {
         // Remove the oparl filters
         // Those parameters shouldn't be on any object, but it's better to sanitize
@@ -110,41 +108,53 @@ impl<'a> FileStorage<'a> {
 
         // Assemble the actual path
         // Folder
-        let mut cachefile = self.cache_dir.to_string().clone();
+        let mut cachefile = Path::new(&self.cache_dir.to_string()).to_path_buf();
         // Schema and host
-        cachefile += url.scheme();
+        let mut host_folder = url.scheme().to_string();
 
         // Host
         if let Some(host) = url.host_str() {
-            cachefile += ":";
-            cachefile += host;
+            host_folder += ":";
+            host_folder += host;
         }
 
         // Port
         if let Some(port) = url.port() {
-            cachefile += ":";
-            cachefile += &port.to_string();
+            host_folder += ":";
+            host_folder += &port.to_string();
         }
+
+        cachefile.push(host_folder);
 
         // Path
         let mut path = url.path().to_string();
         if path.ends_with("/") {
-            path.pop(); // We have a file here, not a folder, dear url creators
+            path.pop(); // Dear url creators, it's a file, not a folder,
         };
-        cachefile += &path;
+
+        let splitted_path = path.split("/").collect::<Vec<&str>>();
+        // Unwrapping is save here as split always returns at least one element
+        let (ref filename, ref folders) = splitted_path.as_slice().split_last().unwrap();
+        for folder in folders.iter() {
+            cachefile.push(folder);
+        }
+
+        let mut filename = filename.to_string();
 
         // Query
         if let Some(query) = url.query() {
             if query != "" {
-                cachefile += "?";
-                cachefile += query;
+                filename += "?";
+                filename += query;
             }
         }
 
         // File extension
-        cachefile += suffix;
+        filename += suffix;
 
-        Path::new(&cachefile).to_path_buf()
+        cachefile.push(filename);
+
+        cachefile
     }
 }
 
