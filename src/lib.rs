@@ -23,7 +23,7 @@
 
 #[macro_use]
 extern crate json;
-extern crate hyper;
+extern crate reqwest;
 extern crate chrono;
 extern crate crossbeam;
 

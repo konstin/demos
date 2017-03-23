@@ -1,6 +1,6 @@
 use super::*;
 
-use hyper::client::IntoUrl;
+use reqwest::client::IntoUrl;
 
 /// Helper for various tests
 pub fn storage<'a>() -> FileStorage<'a> {

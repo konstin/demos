@@ -3,9 +3,9 @@
 
 extern crate oparl_cache;
 #[macro_use] extern crate clap;
-extern crate hyper;
+extern crate reqwest;
 
-use hyper::client::IntoUrl;
+use reqwest::IntoUrl;
 
 use oparl_cache::{Cacher, FileStorage, CommonServer, DEFAULT_CACHE_STATUS_FILE};
 

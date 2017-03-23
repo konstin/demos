@@ -1,4 +1,4 @@
-use hyper;
+use reqwest;
 use json;
 
 use std::error::Error;
@@ -7,18 +7,21 @@ use std::mem;
 use std::convert::From;
 
 use json::JsonValue;
-use hyper::client::IntoUrl;
-use hyper::Url;
+use reqwest::Url;
+use reqwest::IntoUrl;
 
 /// FIXME: Remove me
 /// Helper function to download an object and return it as parsed json
-pub fn download_json(url: Url) -> Result<JsonValue, Box<Error>> {
-    let client = hyper::Client::new();
-    let mut res: hyper::client::Response = client.get(url).send()?;
-    println!("Loaded: {:?}", res.url);
-    let mut json_string = String::new();
-    res.read_to_string(&mut json_string)?;
-    Ok(json::parse(&json_string)?)
+pub fn get_json(url: Url) -> Result<JsonValue, Box<Error>> {
+        println!("Loading: {:?}", &url);
+        let mut reponse = reqwest::get(url)?;
+        if !reponse.status().is_success() {
+            return Err(From::from(format!("Bad status code returned for request: {}", reponse.status())));
+        }
+
+        let mut json_string = String::new();
+        reponse.read_to_string(&mut json_string)?;
+        Ok(json::parse(&json_string)?)
 }
 
 /// Exposes the objects of an eternal list as iterator
@@ -56,10 +59,10 @@ impl Iterator for ExternalList {
                     let mut swap_partner = Err(From::from("placeholder"));
                     mem::swap(remaining, &mut swap_partner);
                     swap_partner
-                },
+                }
                 None => {
-                    download_json(self.url.clone())
-                },
+                    get_json(self.url.clone())
+                }
             }
         };
 
@@ -77,14 +80,14 @@ impl Iterator for ExternalList {
         }
 
         if load_required {
-            response_some = download_json(self.url.clone());
+            response_some = get_json(self.url.clone());
         }
 
         let return_value = match response_some {
             Ok(ref mut response) => {
                 // Yield the objects in the order chosen by the server
                 Some(response["data"].array_remove(0))
-            },
+            }
             Err(ref e) => {
                 println!("Downloading a list page failed. Aborting this list");
                 println!("{:?}", e);

@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use json::JsonValue;
-use hyper::Url;
+use reqwest::Url;
 
 /// Defines a storage for saving objects
 ///

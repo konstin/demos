@@ -5,9 +5,8 @@ use std::error::Error;
 
 use json;
 use json::JsonValue;
-use hyper::Url;
-use hyper::client::IntoUrl;
-use hyper::error::ParseError;
+use reqwest::Url;
+use reqwest::IntoUrl;
 
 use constants::FILE_EXTENSION;
 use cacher::Cacher;
@@ -26,7 +25,7 @@ impl<'a> Storage for FileStorage<'a> {
     /// Writes JSON to the path corresponding with the url. This will be an object and its id in the
     /// most cases
     fn write_to_cache(&self, url: &Url, object: &JsonValue) -> Result<(), Box<Error>> {
-        let filepath = self.url_to_path(url, FILE_EXTENSION)?;
+        let filepath = self.url_to_path(url, FILE_EXTENSION);
         println!("Writen to Cache: {}", filepath.display());
 
         create_dir_all(filepath.parent().ok_or("Invalid cachepath for file")?)?;
@@ -40,7 +39,7 @@ impl<'a> Storage for FileStorage<'a> {
     ///
     /// Returns a boxed error if there was an error reading the cache file
     fn get(&self, url: &Url) -> Result<JsonValue, Box<Error>> {
-        let path = self.url_to_path(&url, FILE_EXTENSION)?;
+        let path = self.url_to_path(&url, FILE_EXTENSION);
         let mut s = String::new();
         let mut file: File = File::open(path)?;
         file.read_to_string(&mut s)?;
@@ -91,7 +90,7 @@ impl<'a> FileStorage<'a> {
     /// <cachedir>/<scheme>[:<host>][:<port>][/<path>]<suffix>
     ///
     /// Returns an error if the given url is not a valid url
-    pub fn url_to_path(&self, url: &Url, suffix: &str) -> Result<PathBuf, ParseError> {
+    pub fn url_to_path(&self, url: &Url, suffix: &str) -> PathBuf {
         // Remove the oparl filters
         // Those parameters shouldn't be on any object, but it's better to sanitize
         let url_binding: Url = url.clone();
@@ -143,7 +142,7 @@ impl<'a> FileStorage<'a> {
         // File extension
         cachefile += suffix;
 
-        Ok(Path::new(&cachefile).to_path_buf())
+        Path::new(&cachefile).to_path_buf()
     }
 }
 
@@ -151,7 +150,7 @@ impl<'a> Cacher for FileStorage<'a> {
     /// Loads the whole API to the cache or updates an existing cache
     /// This function does only do the loading saving and forwards the actual work
     fn cache<U: Server>(&self, server: U) -> Result<(), Box<Error>> {
-        let cache_status_filepath = self.url_to_path(&server.get_entrypoint().clone(), "")?
+        let cache_status_filepath = self.url_to_path(&server.get_entrypoint().clone(), "")
             .join(self.get_cache_status_file());
         println!("{}", &cache_status_filepath.display());
         let mut known_lists: Vec<(Url, Option<String>)>;

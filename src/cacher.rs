@@ -3,8 +3,8 @@ use std::error::Error;
 use std::sync::mpsc::{Sender, channel};
 use std::time::Duration;
 
-use hyper::Url;
-use hyper::client::IntoUrl;
+use reqwest::Url;
+use reqwest::IntoUrl;
 use json::JsonValue;
 use crossbeam;
 use chrono::Local;
@@ -69,9 +69,8 @@ pub trait Cacher: Storage + Sync {
     /// Downloads a whole external list and saves the results to the cache
     /// If `last_sync` is given, the filter modified_since will be appended to the url
     /// `add_list` allows adding external lists that were found when parsing this one
-    fn parse_external_list<U: IntoUrl>(&self, url: U, last_sync: Option<String>,
-                                       add_list: ListSender)
-                                       -> Result<(Url, Option<String>), Box<Error>> {
+    fn parse_external_list(&self, url: Url, last_sync: Option<String>, add_list: ListSender)
+                           -> Result<(Url, Option<String>), Box<Error>> {
         // Take the time before the downloading as the data can change while obtaining pages
         let this_sync = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
 
@@ -143,7 +142,7 @@ pub trait Cacher: Storage + Sync {
 
         // Download the entrypoint which is the System object
         // This will set the first external list, which is the body list
-        let mut system_object = server.download_json(server.get_entrypoint().clone()).unwrap();
+        let mut system_object = server.get_json(server.get_entrypoint().clone()).unwrap();
         self.parse_object(&mut system_object, add_list.clone());
 
         crossbeam::scope(|scope| {
