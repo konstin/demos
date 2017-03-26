@@ -7,7 +7,9 @@ use reqwest::Url;
 use std::io::Read;
 
 /// Defines an oparl server
-pub trait Server {
+///
+/// Send and Sync are required because the server will be used from multiple workers
+pub trait Server: Send + Sync {
     /// Returns a freshly loaded object as json
     fn get_json(&self, url: Url) -> Result<JsonValue, Box<Error>>;
     fn get_entrypoint(&self) -> Url;

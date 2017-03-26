@@ -1,8 +1,6 @@
-use reqwest;
 use json;
 
 use std::error::Error;
-use std::io::Read;
 use std::mem;
 use std::convert::From;
 
@@ -10,48 +8,38 @@ use json::JsonValue;
 use reqwest::Url;
 use reqwest::IntoUrl;
 
-/// FIXME: Remove me
-/// Helper function to download an object and return it as parsed json
-pub fn get_json(url: Url) -> Result<JsonValue, Box<Error>> {
-    println!("Loading: {:?}", &url);
-    let mut reponse = reqwest::get(url)?;
-    if !reponse.status().is_success() {
-        return Err(From::from(format!("Bad status code returned for request: {}",
-                                      reponse.status())));
-    }
-
-    let mut json_string = String::new();
-    reponse.read_to_string(&mut json_string)?;
-    Ok(json::parse(&json_string)?)
-}
+use server::Server;
 
 /// Exposes the objects of an eternal list as iterator
 /// The objects  will be returned in the order they were received from the server
 /// (A stable sorting is demanded by the spec)
 #[derive(Debug)]
-pub struct ExternalList {
+pub struct ExternalList<'a, T: 'a + Server> {
     /// Points to the url of the current or, if the current page is exhausted, to the next one
     url: Url,
     /// Before and after the download, this will be None.
     /// During a successfull download, this will be Some(Ok(JsonValue))
     /// If any request has failed for any reason, this will be Some(Err(_))
     response: Option<Result<JsonValue, Box<Error>>>,
+    /// The server used for getting the objects
+    server: &'a T,
 }
 
-impl ExternalList {
+impl<'a, T: 'a + Server> ExternalList<'a, T> {
     /// Constructs a new `ExternalList`
-    pub fn new(url: Url) -> ExternalList {
+    pub fn new(url: Url, server: &'a T) -> ExternalList<'a, T> {
         ExternalList {
             url: url,
             response: None,
+            server: server,
         }
     }
 }
 
-impl Iterator for ExternalList {
+impl<'a, T: 'a + Server> Iterator for ExternalList<'a, T> {
     type Item = json::JsonValue;
 
-    fn next<'a>(&mut self) -> Option<json::JsonValue> {
+    fn next(&mut self) -> Option<json::JsonValue> {
         // To avoid having multiple mutable borrows of self, a possibly existing version of
         // self.response is swapped out againt an Err at the beginning and re-emplaced at the end
         // of the function call.
@@ -64,7 +52,7 @@ impl Iterator for ExternalList {
                     mem::swap(remaining, &mut swap_partner);
                     swap_partner
                 }
-                None => get_json(self.url.clone()),
+                None => self.server.get_json(self.url.clone()),
             }
         };
 
@@ -86,7 +74,7 @@ impl Iterator for ExternalList {
         }
 
         if load_required {
-            response_some = get_json(self.url.clone());
+            response_some = self.server.get_json(self.url.clone());
         }
 
         let return_value = match response_some {
@@ -109,4 +97,3 @@ impl Iterator for ExternalList {
         return_value
     }
 }
-

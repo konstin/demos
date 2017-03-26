@@ -73,18 +73,19 @@ fn parse_object_find_external_list() {
     let (add_list, receive_list) = channel();
     storage().parse_object(&mut input, add_list);
 
-    let expected_lists = vec![
-        "http://localhost:8080/oparl/v1.0/body/0/list/organization".into_url().unwrap(),
-        "http://localhost:8080/oparl/v1.0/body/0/list/person".into_url().unwrap(),
-        "http://localhost:8080/oparl/v1.0/body/0/list/meeting".into_url().unwrap(),
-        "http://localhost:8080/oparl/v1.0/body/0/list/paper".into_url().unwrap()
-    ];
+    let expected_lists =
+        vec!["http://localhost:8080/oparl/v1.0/body/0/list/organization".into_url().unwrap(),
+             "http://localhost:8080/oparl/v1.0/body/0/list/person".into_url().unwrap(),
+             "http://localhost:8080/oparl/v1.0/body/0/list/meeting".into_url().unwrap(),
+             "http://localhost:8080/oparl/v1.0/body/0/list/paper".into_url().unwrap()];
 
     assert_eq!(input, expected_output);
-    let results: Vec<Url> = receive_list.iter().map(|url| match url {
-        List(url) => url,
-        Done => panic!(),
-    }).collect();
+    let results: Vec<Url> = receive_list.iter()
+        .map(|url| match url {
+                 List(url) => url,
+                 Done => panic!(),
+             })
+        .collect();
     assert_eq!(results, expected_lists);
 }
 
@@ -100,8 +101,9 @@ fn for_one(url: &str, query_string: &str, path: &str) {
 fn test_url_to_path() {
     let cache_status_file = "/tmp/cache-rust/http:localhost:8080/oparl/v1.0/cache-status.json";
     assert_eq!(Path::new(cache_status_file),
-        storage().url_to_path(&"http://localhost:8080/oparl/v1.0".into_url().unwrap(), "")
-        .join("cache-status.json"));
+               storage()
+                   .url_to_path(&"http://localhost:8080/oparl/v1.0".into_url().unwrap(), "")
+                   .join("cache-status.json"));
     for_one("https://example.tld:8080/oparl/v1.0/paper/1",
             "",
             "/tmp/cache-rust/https:example.tld:8080/oparl/v1.0/paper/1.json");

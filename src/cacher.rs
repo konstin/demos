@@ -79,11 +79,12 @@ pub trait Cacher: Storage + Sync {
     /// Downloads a whole external list and saves the results to the cache
     /// If `last_sync` is given, the filter modified_since will be appended to the url
     /// `add_list` allows adding external lists that were found when parsing this one
-    fn parse_external_list(&self,
-                           url: Url,
-                           last_sync: Option<String>,
-                           add_list: ListSender)
-                           -> Result<(Url, Option<String>), Box<Error>> {
+    fn parse_external_list<T: Server>(&self,
+                                      url: Url,
+                                      last_sync: Option<String>,
+                                      server: &T,
+                                      add_list: ListSender)
+                                      -> Result<(Url, Option<String>), Box<Error>> {
         // Take the time before the downloading as the data can change while obtaining pages
         let this_sync = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
 
@@ -98,7 +99,7 @@ pub trait Cacher: Storage + Sync {
                 .finish();
         }
 
-        let elist = ExternalList::new(Url::parse(url_with_filters.as_str())?);
+        let elist = ExternalList::new(Url::parse(url_with_filters.as_str())?, server);
 
         let mut urls = Vec::new();
 
@@ -196,9 +197,11 @@ pub trait Cacher: Storage + Sync {
                 let add_list = add_list.clone();
                 let url = url.clone();
                 let last_update = last_update.clone();
+                let server = &server;
 
                 let closure = move || {
-                    let list_result = self.parse_external_list(url, last_update, add_list.clone());
+                    let list_result =
+                        self.parse_external_list(url, last_update, server, add_list.clone());
                     add_list.send(Message::Done).unwrap();
 
                     let sendable_and_typed: Result<_, Box<Error + Send + Sync>>;
