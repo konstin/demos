@@ -21,6 +21,7 @@ pub struct CommonServer {
 }
 
 impl CommonServer {
+    /// Creates a new CommonServer
     pub fn new(entrypoint: Url) -> CommonServer {
         CommonServer { entrypoint: entrypoint }
     }

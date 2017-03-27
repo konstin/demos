@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::error::Error;
 use std::sync::mpsc::{Sender, channel};
 use std::time::Duration;
+use std::io::stdout;
 
 use reqwest::Url;
 use reqwest::IntoUrl;
@@ -35,45 +36,44 @@ pub trait Cacher: Storage + Sync {
                    key: &str,
                    entry: &mut JsonValue,
                    entry_def: &JsonValue,
-                   add_list: ListSender) {
+                   add_list: ListSender) -> Result<(), Box<Error>> {
         if entry_def["type"] == "array" {
             for mut i in entry.members_mut() {
                 let key = key.to_string() + "[" + &i.to_string() + "]";
-                self.parse_entry(key.as_str(), &mut i, &entry_def["items"], add_list.clone());
+                self.parse_entry(key.as_str(), &mut i, &entry_def["items"], add_list.clone())?;
             }
         } else if entry_def["type"] == "object" {
             if entry["type"] == "Feature" {
-                return; // GeoJSON is treated is a single value
+                return Ok(()); // GeoJSON is treated is a single value
             }
             // Extract the embedded object leaving its id
-            self.parse_object(entry, add_list);
+            self.parse_object(entry, add_list)?;
             *entry = JsonValue::String(entry["id"].to_string());
         } else if entry_def["references"] == "externalList" {
-            add_list.send(Message::List(entry.to_string().into_url().unwrap())).unwrap();
+            add_list.send(Message::List(entry.to_string().into_url()?)).unwrap();
         }
+
+        Ok(())
     }
 
     /// Determines the corresponding schema of an object, lets all it's attributes be parsed
     /// recursively and then writes the object to the cache
-    fn parse_object(&self, target: &mut JsonValue, add_list: ListSender) {
+    fn parse_object(&self, target: &mut JsonValue, add_list: ListSender) -> Result<(), Box<Error>> {
         let let_binding = target["type"].to_string();
-        let oparl_type = let_binding.split("/").last().unwrap();
+        let oparl_type = let_binding.split("/").last().ok_or("Invalid type url")?;
         let spec_for_object = &self.get_schema()[oparl_type]["properties"];
 
         for (key, mut value) in target.entries_mut() {
             // Check if the key is defined in the specification
-            if spec_for_object.entries().map(|(key, _)| key).any(|i| i == key) {
-                self.parse_entry(key, &mut value, &spec_for_object[key], add_list.clone());
+            if spec_for_object.has_key(key) {
+                self.parse_entry(key, &mut value, &spec_for_object[key], add_list.clone())?;
             }
         }
 
-        self.write_to_cache(&target["id"]
-                                 .as_str()
-                                 .unwrap()
-                                 .into_url()
-                                 .unwrap(),
-                            &target)
-            .unwrap();
+        let id = target["id"].as_str().ok_or("The id has to be a String")?.into_url()?;
+        self.write_to_cache(&id, &target)?;
+
+        Ok(())
     }
 
     /// Downloads a whole external list and saves the results to the cache
@@ -91,29 +91,34 @@ pub trait Cacher: Storage + Sync {
         let url_without_filters = url.into_url()?;
         let mut url_with_filters: Url = url_without_filters.clone();
 
-        if let Some(last_sync_time) = last_sync {
+        if let Some(ref last_sync_time) = last_sync {
             // Add the modified_since filter
             url_with_filters.query_pairs_mut()
                 .append_pair("modified_since", &last_sync_time)
                 .finish();
         }
 
-        let elist = ExternalList::new(Url::parse(url_with_filters.as_str())?, server);
+        let list = ExternalList::new(Url::parse(url_with_filters.as_str())?, server);
 
         let mut urls = Vec::new();
 
-
-        for i in elist {
-            let mut i = i?;
-            self.parse_object(&mut i, add_list.clone());
+        for i in list {
+            let mut i: JsonValue = i?;
+            let result = self.parse_object(&mut i, add_list.clone());
+            if let Err(err) = result {
+                println!("Invalid object: {}", err);
+                i.write_pretty(&mut stdout(), 4).unwrap();
+                println!("Skipping the above object");
+            }
             urls.push(i["id"].to_string());
         }
 
-        let mut old_urls = Vec::new();
-        urls.append(&mut old_urls);
-
         // Get the the lists cached in the last run
-        let mut urls_as_json = self.get(&url_with_filters).unwrap_or(JsonValue::new_array());
+        let mut urls_as_json = if last_sync.is_some() {
+            self.get(&url_with_filters)?
+        } else {
+            JsonValue::new_array()
+        };
 
         if !urls_as_json.is_array() {
             return Err(From::from(format!("Invalid cache for {}", url_with_filters)));
@@ -152,8 +157,14 @@ pub trait Cacher: Storage + Sync {
 
         // Download the entrypoint which is the System object
         // This will set the first external list, which is the body list
-        let mut system_object = server.get_json(server.get_entrypoint().clone()).unwrap();
-        self.parse_object(&mut system_object, add_list.clone());
+        let system_object = server.get_json(server.get_entrypoint().clone());
+        let result = system_object.and_then(|mut x| self.parse_object(&mut x, add_list.clone()));
+
+        if let Err(err) = result {
+            println!("Failed to parse the System object: {}", err);
+            println!("Aborting");
+            return vec![];
+        };
 
         crossbeam::scope(|scope| {
             loop {
@@ -171,7 +182,7 @@ pub trait Cacher: Storage + Sync {
                             Err(_) => {
                                 // Granted, this is no the optimal solution. But it's better than
                                 // nothing at all
-                                println!("No message from any worker. Have they hung up?");
+                                println!("No message from any worker after 10 seconds ...");
                                 continue;
                             }
                         }

@@ -1,10 +1,9 @@
 use json;
-
-use std::error::Error;
-
 use json::JsonValue;
 use reqwest::Url;
 use reqwest::IntoUrl;
+
+use std::error::Error;
 
 use server::Server;
 
