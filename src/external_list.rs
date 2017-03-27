@@ -1,8 +1,6 @@
 use json;
 
 use std::error::Error;
-use std::mem;
-use std::convert::From;
 
 use json::JsonValue;
 use reqwest::Url;
@@ -15,12 +13,10 @@ use server::Server;
 /// (A stable sorting is demanded by the spec)
 #[derive(Debug)]
 pub struct ExternalList<'a, T: 'a + Server> {
-    /// Points to the url of the current or, if the current page is exhausted, to the next one
-    url: Url,
-    /// Before and after the download, this will be None.
-    /// During a successfull download, this will be Some(Ok(JsonValue))
-    /// If any request has failed for any reason, this will be Some(Err(_))
-    response: Option<Result<JsonValue, Box<Error>>>,
+    /// The url of the next list page, if any
+    page_link: Option<Url>,
+    /// The items of the current list page
+    objects: Vec<JsonValue>,
     /// The server used for getting the objects
     server: &'a T,
 }
@@ -29,71 +25,53 @@ impl<'a, T: 'a + Server> ExternalList<'a, T> {
     /// Constructs a new `ExternalList`
     pub fn new(url: Url, server: &'a T) -> ExternalList<'a, T> {
         ExternalList {
-            url: url,
-            response: None,
+            page_link: Some(url),
+            objects: vec![],
             server: server,
         }
     }
 }
 
 impl<'a, T: 'a + Server> Iterator for ExternalList<'a, T> {
-    type Item = json::JsonValue;
+    type Item = Result<json::JsonValue, Box<Error>>;
 
-    fn next(&mut self) -> Option<json::JsonValue> {
-        // To avoid having multiple mutable borrows of self, a possibly existing version of
-        // self.response is swapped out againt an Err at the beginning and re-emplaced at the end
-        // of the function call.
-
-        let mut response_some: ::std::result::Result<_, _> = {
-            match self.response {
-                Some(ref mut remaining) => {
-                    // Avoid moving self.response by assinging an intermediate value
-                    let mut swap_partner = Err(From::from("placeholder"));
-                    mem::swap(remaining, &mut swap_partner);
-                    swap_partner
-                }
-                None => self.server.get_json(self.url.clone()),
-            }
-        };
-
-        let mut load_required = false;
-        if let Ok(ref response) = response_some {
-            if response["data"].len() == 0 {
-                // Check wether this page is exhausted
-                if response["links"].entries().any(|(x, _)| x == "next") {
-                    self.url = response["links"]["next"]
-                        .as_str()
-                        .unwrap()
-                        .into_url()
-                        .unwrap();
-                    load_required = true;
-                } else {
-                    return None; // List ended succesfully
-                }
-            }
+    fn next(&mut self) -> Option<Result<json::JsonValue, Box<Error>>> {
+        // Case 1: There are still objects of the last page, so return them
+        if self.objects.len() >= 1 {
+            return Some(Ok(self.objects.remove(0)));
         }
 
-        if load_required {
-            response_some = self.server.get_json(self.url.clone());
+        // The loop is used because there might be empty pages
+        loop {
+            let response = if let Some(ref url) = self.page_link {
+                // Case 2: No items, but there is the url of the next page
+                self.server.get_json(url.clone())
+            } else {
+                // Case 3: The list is finished (or errored)
+                return None;
+            };
+
+            let mut response = match response {
+                Ok(ok) => ok,
+                Err(err) => {
+                    // There's no way to recover from a failed request
+                    self.page_link = None;
+                    return Some(Err(err));
+                }
+            };
+
+            // Update the next page link and the items, setting it to None or empty respectively
+            // on failure
+            self.page_link = response["links"]["next"].as_str().and_then(|x| x.into_url().ok());
+            self.objects = match response["data"].take() {
+                JsonValue::Array(items) => items,
+                _ => vec![],
+            };
+
+            if self.objects.len() >= 1 {
+                // Case 2.1: The page actually contains data
+                return Some(Ok(self.objects.remove(0)));
+            }
         }
-
-        let return_value = match response_some {
-            Ok(ref mut response) => {
-                // Yield the objects in the order chosen by the server
-                Some(response["data"].array_remove(0))
-            }
-            Err(ref e) => {
-                println!("Downloading a list page failed. Aborting this list");
-                println!("{:?}", e);
-                None
-            }
-        };
-
-        // self.response was replaced by an inermediate value, so move possibly updated value back
-        // in place
-        let mut x = Some(response_some);
-        mem::swap(&mut self.response, &mut x);
-
-        return_value
     }
 }

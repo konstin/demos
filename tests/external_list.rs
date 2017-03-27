@@ -42,6 +42,6 @@ fn external_list() {
 
     let list = ExternalList::new(eurl.into_url().unwrap(), &server);
 
-    let ids = list.map(|i| i["id"].to_owned()).collect::<Vec<_>>();
+    let ids = list.map(|i| i.unwrap()["id"].to_owned()).collect::<Vec<_>>();
     assert_eq!(ids, expected_ids);
 }

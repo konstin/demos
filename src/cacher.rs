@@ -88,7 +88,6 @@ pub trait Cacher: Storage + Sync {
         // Take the time before the downloading as the data can change while obtaining pages
         let this_sync = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
 
-        let limit: Option<usize> = None;
         let url_without_filters = url.into_url()?;
         let mut url_with_filters: Url = url_without_filters.clone();
 
@@ -103,17 +102,11 @@ pub trait Cacher: Storage + Sync {
 
         let mut urls = Vec::new();
 
-        // TODO: use traits unstead of this weird type system hack
-        if let Some(limeter) = limit {
-            for mut i in elist.take(limeter) {
-                self.parse_object(&mut i, add_list.clone());
-                urls.push(i["id"].to_string());
-            }
-        } else {
-            for mut i in elist {
-                self.parse_object(&mut i, add_list.clone());
-                urls.push(i["id"].to_string());
-            }
+
+        for i in elist {
+            let mut i = i?;
+            self.parse_object(&mut i, add_list.clone());
+            urls.push(i["id"].to_string());
         }
 
         let mut old_urls = Vec::new();
