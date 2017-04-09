@@ -137,7 +137,7 @@ pub trait Cacher: Storage + Sync {
     /// The weird command order is due to the Mutex-locking which would otherwise dead-lock
     /// the child threads
     fn load_all_external_lists<T: Server>(&self,
-                                          server: T,
+                                          server: &T,
                                           known: &Vec<(Url, Option<String>)>)
                                           -> Vec<(Url, Option<String>)> {
         let mut thread_handles = vec![];
@@ -201,7 +201,6 @@ pub trait Cacher: Storage + Sync {
                 let add_list = add_list.clone();
                 let url = url.clone();
                 let last_update = last_update.clone();
-                let server = &server;
 
                 let closure = move || {
                     let list_result =

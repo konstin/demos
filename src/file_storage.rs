@@ -8,7 +8,7 @@ use json::JsonValue;
 use reqwest::Url;
 use reqwest::IntoUrl;
 
-use constants::FILE_EXTENSION;
+use constants;
 use cacher::Cacher;
 use server::Server;
 use storage::Storage;
@@ -25,7 +25,7 @@ impl<'a> Storage for FileStorage<'a> {
     /// Writes JSON to the path corresponding with the url. This will be an object and its id in the
     /// most cases
     fn write_to_cache(&self, url: &Url, object: &JsonValue) -> Result<(), Box<Error>> {
-        let filepath = self.url_to_path(url, FILE_EXTENSION);
+        let filepath = self.url_to_path(url, constants::FILE_EXTENSION);
         println!("Writen to Cache: {}", filepath.display());
 
         create_dir_all(filepath.parent().ok_or("Invalid cachepath for file")?)?;
@@ -39,7 +39,7 @@ impl<'a> Storage for FileStorage<'a> {
     ///
     /// Returns a boxed error if there was an error reading the cache file
     fn get(&self, url: &Url) -> Result<JsonValue, Box<Error>> {
-        let path = self.url_to_path(&url, FILE_EXTENSION);
+        let path = self.url_to_path(&url, constants::FILE_EXTENSION);
         let mut s = String::new();
         let mut file: File = File::open(path)?;
         file.read_to_string(&mut s)?;
@@ -156,15 +156,29 @@ impl<'a> FileStorage<'a> {
 
         cachefile
     }
+
+    pub fn get_cached_servers(&self) -> Result<JsonValue, Box<Error>> {
+        let mut contents = String::new();
+        let path = Path::new(self.get_cache_dir()).join(constants::DEFAULT_CACHED_SERVERS_FILE);
+        let file = File::open(&path);
+
+        if let Ok(mut file) = file {
+            file.read_to_string(&mut contents)?;
+            let json = json::parse(&contents)?;
+            return Ok(json);
+        } else {
+            return Ok(JsonValue::new_array());
+        }
+    }
 }
 
 impl<'a> Cacher for FileStorage<'a> {
     /// Loads the whole API to the cache or updates an existing cache
     /// This function does only do the loading saving and forwards the actual work
     fn cache<U: Server>(&self, server: U) -> Result<(), Box<Error>> {
-        let cache_status_filepath = self.url_to_path(&server.get_entrypoint().clone(), "")
-            .join(self.get_cache_status_file());
-        println!("{}", &cache_status_filepath.display());
+        let entrypoint_path = self.url_to_path(&server.get_entrypoint(), "");
+        let cache_status_filepath = entrypoint_path.join(self.get_cache_status_file());
+        println!("Cache Status File: {}", &cache_status_filepath.display());
         let mut known_lists: Vec<(Url, Option<String>)>;
 
         if cache_status_filepath.exists() {
@@ -175,10 +189,9 @@ impl<'a> Cacher for FileStorage<'a> {
             cache_status_file.read_to_string(&mut read)?;
             known_lists = vec![];
             for i in json::parse(&read)?.members() {
-                known_lists.push((i["url"].as_str()
-                                      .ok_or("invalid cache status file")?
-                                      .into_url()?,
-                                  Some(i["last_sync"].to_string())));
+                let url = i["url"].as_str().ok_or("invalid cache status file")?.into_url()?;
+                let last_sync = Some(i["last_sync"].to_string());
+                known_lists.push((url, last_sync));
             }
             println!("External lists found in cache: {}", known_lists.len());
         } else {
@@ -200,7 +213,7 @@ impl<'a> Cacher for FileStorage<'a> {
         let mut cache_status_json = JsonValue::new_array();
 
         // Here the actual work is done
-        let mut new_cache_status = self.load_all_external_lists(server, &known_lists);
+        let mut new_cache_status = self.load_all_external_lists(&server, &known_lists);
         for i in new_cache_status.drain(..) {
             cache_status_json.push(object! {
                 "url" => JsonValue::from(i.0.to_string()),
@@ -209,6 +222,19 @@ impl<'a> Cacher for FileStorage<'a> {
         }
 
         cache_status_json.write_pretty(&mut cache_status_file, 4)?;
+
+        // After successful caching, add this server to the list of cached servers
+        let mut json = self.get_cached_servers()?;
+
+        let entrypoint = server.get_entrypoint();
+        if !json.contains(entrypoint.as_str()) {
+            println!("Adding server to known servers");
+            json.push(entrypoint.as_str())?;
+        }
+
+        let path = Path::new(self.get_cache_dir()).join(constants::DEFAULT_CACHED_SERVERS_FILE);
+        let mut file = File::create(&path)?;
+        json.write_pretty(&mut file, 4)?;
 
         Ok(())
     }

@@ -6,9 +6,21 @@ extern crate oparl_cache;
 extern crate clap;
 extern crate reqwest;
 
+use std::error::Error;
+
 use reqwest::IntoUrl;
 
 use oparl_cache::{Cacher, FileStorage, CommonServer, DEFAULT_CACHE_STATUS_FILE};
+
+/// List the servers cached in a storage
+fn list(storage: FileStorage) -> Result<(), Box<Error>> {
+    let servers = storage.get_cached_servers()?;
+    println!("The following servers have been cached:");
+    for i in servers.members() {
+        println!(" - {}", i.as_str().ok_or("The entry isn't a url")?);
+    }
+    return Ok(());
+}
 
 fn main() {
     let matches = clap_app!(OParl_Cache_Rust =>
@@ -18,8 +30,11 @@ fn main() {
         (@arg schemadir: -s --schema "The path of the folder with the OParl schema")
         (@arg cache_status_file: --cachestatus "The file where the information concerning the \
                                                  cache status gets stored")
+        (@subcommand list =>
+            (about: "List the servers cached in this storage")
+        )
     )
-            .get_matches();
+        .get_matches();
 
     let entrypoint = matches.value_of("entrypoint").unwrap_or("http://localhost:8080/oparl/v1.0/");
     let cachedir = matches.value_of("cachedir").unwrap_or("/home/konsti/cache-rust/");
@@ -38,6 +53,15 @@ fn main() {
 
     let server = CommonServer::new(entrypoint);
     let storage = FileStorage::new(schemadir, cachedir, cache_status_file).unwrap();
+
+    if matches.is_present("list") {
+        let result = list(storage);
+        if let Err(err) = result {
+            println!("The file listing the servers has been corrupted ({})", err.description());
+        }
+        return;
+    }
+
     let status = storage.cache(server);
 
     if let Err(err) = status {
