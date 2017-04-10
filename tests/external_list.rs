@@ -1,6 +1,8 @@
 extern crate oparl_cache;
 extern crate reqwest;
 extern crate chrono;
+#[macro_use]
+extern crate json;
 
 mod common;
 
@@ -22,7 +24,7 @@ fn parse_external_list() {
     let (add_list, receive_list) = channel();
     let server = server();
 
-    storage().parse_external_list(url.into_url().unwrap(), Some(time), &server, add_list).unwrap();
+    assert!(storage().parse_external_list(url.into_url().unwrap(), Some(time), &server, add_list).is_err());
 
     assert_eq!(receive_list.recv().is_err(), true);
     // TODO: Check returned value

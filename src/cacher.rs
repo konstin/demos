@@ -166,6 +166,11 @@ pub trait Cacher: Storage + Sync {
             return vec![];
         };
 
+        if queue.is_empty() {
+            println!("Warn: No external lists found");
+            return vec![];
+        }
+
         crossbeam::scope(|scope| {
             loop {
                 // Searches for new lists or exits when all workers finshed
