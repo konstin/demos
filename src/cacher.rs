@@ -115,7 +115,13 @@ pub trait Cacher: Storage + Sync {
 
         // Get the the lists cached in the last run
         let mut urls_as_json = if last_sync.is_some() {
-            self.get(&url_with_filters)?
+            match self.get(&url_with_filters) {
+                Ok(ok) => ok,
+                Err(_) => {
+                    println!("Warn: Trying to perform an incremental update on a list with an invalid cache");
+                    JsonValue::new_array()
+                }
+            }
         } else {
             JsonValue::new_array()
         };
@@ -127,6 +133,8 @@ pub trait Cacher: Storage + Sync {
         for i in urls {
             urls_as_json.push(i)?;
         }
+
+
         self.write_to_cache(&url_with_filters, &urls_as_json)?;
 
         Ok((url_without_filters, Some(this_sync)))

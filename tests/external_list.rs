@@ -6,8 +6,8 @@ extern crate json;
 
 mod common;
 
-use chrono::Local;
 use reqwest::IntoUrl;
+use reqwest::Url;
 
 use std::sync::mpsc::channel;
 
@@ -16,18 +16,60 @@ use oparl_cache::Cacher;
 
 use common::*;
 
-#[test]
-fn parse_external_list() {
+fn test_parse_external_list(with_modified: bool) {
+    let mut server = mocking_server("http://localhost:8080/oparl/v1.0".into_url().unwrap());
+
     let url = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
-    let time = Local::now().format("%Y-%m-%dT%H:%M:%S%Z").to_string();
+    let time = "1969-07-21T02:56:00+00:00".to_string();
+
+    let url_with_time1;
+    let url_with_time2;
+
+    if with_modified {
+        url_with_time1 = Url::parse_with_params(url, &[("modified_since", &time)]).unwrap();
+        url_with_time2 = Url::parse_with_params(url, &[("id", "3"), ("modified_since", &time)]).unwrap();
+    } else {
+        url_with_time1 = Url::parse(url).unwrap();
+        url_with_time2 = Url::parse_with_params(url, &[("id", "3")]).unwrap();
+    }
+
+    let next = if with_modified {
+        "http://localhost:8080/oparl/v1.0/body/0/list/paper?id=3&modified_since=1969-07-21T02%3A56%3A00%2B00%3A00"
+    } else {
+        "http://localhost:8080/oparl/v1.0/body/0/list/paper?id=3"
+    };
+
+    let page1 = object!{
+        "data" => array![],
+        "links" => object!{
+            "next" => next
+        }
+    };
+
+    let page2 = object!{
+        "data" => array![],
+        "links" => object!{}
+    };
+
+    server.add_response(url_with_time1, page1);
+    server.add_response(url_with_time2, page2);
 
     let (add_list, receive_list) = channel();
-    let server = server();
+    let storage = storage();
 
-    assert!(storage().parse_external_list(url.into_url().unwrap(), Some(time), &server, add_list).is_err());
+    let modified = if with_modified { Some(time) } else { None };
+
+    storage.parse_external_list(url.into_url().unwrap(), modified, &server, add_list).unwrap();
+
+    cleanup(&storage);
 
     assert_eq!(receive_list.recv().is_err(), true);
-    // TODO: Check returned value
+}
+
+#[test]
+fn run_test_parse_external_list() {
+    test_parse_external_list(false);
+    test_parse_external_list(true);
 }
 
 #[test]
@@ -39,10 +81,10 @@ fn external_list() {
                         "http://localhost:8080/oparl/v1.0/paper/5",
                         "http://localhost:8080/oparl/v1.0/paper/6",
                         "http://localhost:8080/oparl/v1.0/paper/7"];
-    let eurl = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
+    let url = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
     let server = server();
 
-    let list = ExternalList::new(eurl.into_url().unwrap(), &server);
+    let list = ExternalList::new(url.into_url().unwrap(), &server);
 
     let ids = list.map(|i| i.unwrap()["id"].to_owned()).collect::<Vec<_>>();
     assert_eq!(ids, expected_ids);
