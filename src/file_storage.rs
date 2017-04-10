@@ -17,7 +17,7 @@ use storage::Storage;
 #[derive(Clone)]
 pub struct FileStorage<'a> {
     schema: JsonValue,
-    cache_dir: &'a str,
+    cache_dir: PathBuf,
     cache_status_file: &'a str,
 }
 
@@ -55,8 +55,8 @@ impl<'a> Storage for FileStorage<'a> {
 
 impl<'a> FileStorage<'a> {
     /// Creates a new `Storage`
-    pub fn new(schema_dir: &'a str,
-               cache_dir: &'a str,
+    pub fn new(schema_dir: &Path,
+               cache_dir: PathBuf,
                cache_status_file: &'a str)
                -> Result<FileStorage<'a>, Box<Error>> {
         // Load the schema
@@ -79,8 +79,8 @@ impl<'a> FileStorage<'a> {
     }
 
     /// Returns `cache_dir`
-    pub fn get_cache_dir(&self) -> &'a str {
-        self.cache_dir
+    pub fn get_cache_dir(&self) -> PathBuf {
+        self.cache_dir.clone()
     }
 
     /// Returns `cache_status_file`
@@ -108,7 +108,7 @@ impl<'a> FileStorage<'a> {
 
         // Assemble the actual path
         // Folder
-        let mut cachefile = Path::new(&self.cache_dir.to_string()).to_path_buf();
+        let mut cachefile = self.cache_dir.clone();
         // Schema and host
         let mut host_folder = url.scheme().to_string();
 
@@ -159,8 +159,10 @@ impl<'a> FileStorage<'a> {
 
     pub fn get_cached_servers(&self) -> Result<JsonValue, Box<Error>> {
         let mut contents = String::new();
-        let path = Path::new(self.get_cache_dir()).join(constants::DEFAULT_CACHED_SERVERS_FILE);
+        let path = self.get_cache_dir().join(constants::DEFAULT_CACHED_SERVERS_FILE);
         let file = File::open(&path);
+
+        println!("{}", path.display());
 
         if let Ok(mut file) = file {
             file.read_to_string(&mut contents)?;
@@ -232,7 +234,8 @@ impl<'a> Cacher for FileStorage<'a> {
             json.push(entrypoint.as_str())?;
         }
 
-        let path = Path::new(self.get_cache_dir()).join(constants::DEFAULT_CACHED_SERVERS_FILE);
+        let mut path = self.get_cache_dir();
+        path.push(constants::DEFAULT_CACHED_SERVERS_FILE);
         let mut file = File::create(&path)?;
         json.write_pretty(&mut file, 4)?;
 

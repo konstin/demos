@@ -7,6 +7,7 @@ extern crate clap;
 extern crate reqwest;
 
 use std::error::Error;
+use std::path::Path;
 
 use reqwest::IntoUrl;
 
@@ -52,7 +53,7 @@ fn main() {
     };
 
     let server = CommonServer::new(entrypoint);
-    let storage = FileStorage::new(schemadir, cachedir, cache_status_file).unwrap();
+    let storage = FileStorage::new(Path::new(schemadir), Path::new(cachedir).to_owned(), cache_status_file).unwrap();
 
     if matches.is_present("list") {
         let result = list(storage);
