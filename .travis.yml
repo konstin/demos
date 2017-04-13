@@ -10,3 +10,6 @@ matrix:
     - rust: nightly
 
 cache: cargo
+
+install:
+ - git clone https://github.com/oparl/spec oparl

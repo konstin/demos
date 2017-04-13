@@ -19,7 +19,7 @@ pub fn storage<'a>() -> FileStorage<'a> {
 
     let path = Path::new("/tmp").join("cache-rust-".to_owned() + &uid);
 
-    FileStorage::new(Path::new("/home/konsti/oparl/schema"),
+    FileStorage::new(Path::new("oparl/schema"),
                      path,
                      DEFAULT_CACHE_STATUS_FILE)
             .unwrap()
