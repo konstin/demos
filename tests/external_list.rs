@@ -17,7 +17,8 @@ use oparl_cache::Cacher;
 use common::*;
 
 fn test_parse_external_list(with_modified: bool) {
-    let mut server = mocking_server("http://localhost:8080/oparl/v1.0".into_url().unwrap());
+    let base_url = "http://localhost:8080/oparl/v1.0".into_url().unwrap();
+    let mut server = mocking_server(base_url);
 
     let url = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
     let time = "1969-07-21T02:56:00+00:00".to_string();
@@ -59,10 +60,11 @@ fn test_parse_external_list(with_modified: bool) {
 
     let modified = if with_modified { Some(time) } else { None };
 
-    storage.parse_external_list(url.into_url().unwrap(), modified, &server, add_list).unwrap();
+    let returned = storage.parse_external_list(url.into_url().unwrap(), modified, &server, add_list).unwrap();
 
     cleanup(&storage);
 
+    assert_eq!(returned.0, url.into_url().unwrap());
     assert_eq!(receive_list.recv().is_err(), true);
 }
 
@@ -72,19 +74,40 @@ fn run_test_parse_external_list() {
     test_parse_external_list(true);
 }
 
+/// Check whether iterating over a simple external list with an empty returns the right object ids
 #[test]
 fn external_list() {
-    let expected_ids = ["http://localhost:8080/oparl/v1.0/paper/1",
-                        "http://localhost:8080/oparl/v1.0/paper/2",
-                        "http://localhost:8080/oparl/v1.0/paper/3",
-                        "http://localhost:8080/oparl/v1.0/paper/4",
-                        "http://localhost:8080/oparl/v1.0/paper/5",
-                        "http://localhost:8080/oparl/v1.0/paper/6",
-                        "http://localhost:8080/oparl/v1.0/paper/7"];
-    let url = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
-    let server = server();
+    let expected_ids = ["http://oparl.tld/0",
+                        "http://oparl.tld/1",
+                        "http://oparl.tld/2",
+                        "http://oparl.tld/3"];
+    let url = "http://oparl.tld/".into_url().unwrap();
+    let server = mocking_server(url.clone())
+        .with_response("http://oparl.tld/list", object!{
+            "data" => array![
+                object!{"id" => "http://oparl.tld/0"},
+                object!{"id" => "http://oparl.tld/1"}
+             ],
+            "links" => object!{
+                "next" => "http://oparl.tld/list?page=2"
+            }
+        }).with_response("http://oparl.tld/list?page=2", object!{
+            // Empty pages are allowed by the spec
+            "data" => array![],
+            "links" => object!{
+                "next" => "http://oparl.tld/list?page=2"
+            }
+        }).with_response("http://oparl.tld/list?page=2", object!{
+            "data" => array![
+                object!{"id" => "http://oparl.tld/2"},
+                object!{"id" => "http://oparl.tld/3"}
+             ],
+            "links" => object!{
+                // Last page
+            }
+        });
 
-    let list = ExternalList::new(url.into_url().unwrap(), &server);
+    let list = ExternalList::new("http://oparl.tld/list".into_url().unwrap(), &server);
 
     let ids = list.map(|i| i.unwrap()["id"].to_owned()).collect::<Vec<_>>();
     assert_eq!(ids, expected_ids);

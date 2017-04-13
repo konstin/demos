@@ -3,6 +3,7 @@ use std::error::Error;
 
 use json::JsonValue;
 use reqwest::Url;
+use reqwest::IntoUrl;
 
 use oparl_cache::Server;
 
@@ -18,6 +19,11 @@ impl MockingServer {
 
     pub fn add_response(&mut self, url: Url, response: JsonValue) {
         self.responses.insert(url, response);
+    }
+
+    pub fn with_response<T: IntoUrl>(mut self, url: T, response: JsonValue) -> MockingServer {
+        self.responses.insert(url.into_url().unwrap(), response);
+        self
     }
 }
 
