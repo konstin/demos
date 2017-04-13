@@ -16,23 +16,24 @@ use oparl_cache::FileStorage;
 
 use common::*;
 
+/// Ensure that an embedded object will be properly extracted from a parent object
 #[test]
 fn parse_object_and_extract_embedded_object() {
     let mut input = object! {
-            "id" => "http://localhost:8080/oparl/v1.0/paper/2",
-            "type" => "https://schema.oparl.org/1.0/Paper",
-            "auxiliaryFile" => array![
-                object!{
-                  "id" => "http://localhost:8080/oparl/v1.0/file/2",
-                  "type" => "https://schema.oparl.org/1.0/File",
-                  "accessUrl" => "http://localhost:8080/fileaccess/access/2",
-                  "created" => "2016-05-02T19:53:08+02:00",
-                  "modified" => "2016-05-02T19:53:08+02:00"
-                }
-            ],
-            "created" => "2016-05-02T00:00:00+02:00",
-            "modified" => "2016-05-02T00:00:00+02:00"
-        };
+        "id" => "http://localhost:8080/oparl/v1.0/paper/2",
+        "type" => "https://schema.oparl.org/1.0/Paper",
+        "auxiliaryFile" => array![
+            object!{
+              "id" => "http://localhost:8080/oparl/v1.0/file/2",
+              "type" => "https://schema.oparl.org/1.0/File",
+              "accessUrl" => "http://localhost:8080/fileaccess/access/2",
+              "created" => "2016-05-02T19:53:08+02:00",
+              "modified" => "2016-05-02T19:53:08+02:00"
+            }
+        ],
+        "created" => "2016-05-02T00:00:00+02:00",
+        "modified" => "2016-05-02T00:00:00+02:00"
+    };
 
     // Create a deep copy and replace the embedded object by its id
     let mut expected_output = json::parse(&input.dump()).unwrap();
@@ -49,6 +50,32 @@ fn parse_object_and_extract_embedded_object() {
     assert_eq!(receive_list.recv().is_err(), true);
 }
 
+/// Ensure that parse_object ignores embedded geojson objects
+#[test]
+fn parse_object_ignore_geojson() {
+    let mut input = object!{
+        "id" => "https://example.com",
+        "type" => "https://schema.oparl.org/1.0/Paper",
+        "geojson" => object!{
+            "this" => "should not be touched"
+        }
+    };
+
+    // Create a deep copy and replace the embedded object by its id
+    let expected_output = json::parse(&input.dump()).unwrap();
+
+    let storage = storage();
+    let (add_list, receive_list) = channel();
+
+    storage.parse_object(&mut input, add_list).unwrap();
+
+    cleanup(&storage);
+
+    assert_eq!(input, expected_output);
+    assert_eq!(receive_list.recv().is_err(), true);
+}
+
+/// Ensure that all links to external lists are extracted from objects
 #[test]
 fn parse_object_find_external_list() {
     let mut input = object! {
@@ -97,7 +124,66 @@ fn parse_object_find_external_list() {
     assert_eq!(results, expected_lists);
 }
 
+///
+fn test_parse_external_list(with_modified: bool) {
+    let base_url = "http://localhost:8080/oparl/v1.0".into_url().unwrap();
+    let mut server = mocking_server(base_url);
 
+    let url = "http://localhost:8080/oparl/v1.0/body/0/list/paper";
+    let time = "1969-07-21T02:56:00+00:00".to_string();
+
+    let url_with_time1;
+    let url_with_time2;
+
+    if with_modified {
+        url_with_time1 = Url::parse_with_params(url, &[("modified_since", &time)]).unwrap();
+        url_with_time2 = Url::parse_with_params(url, &[("id", "3"), ("modified_since", &time)]).unwrap();
+    } else {
+        url_with_time1 = Url::parse(url).unwrap();
+        url_with_time2 = Url::parse_with_params(url, &[("id", "3")]).unwrap();
+    }
+
+    let next = if with_modified {
+        "http://localhost:8080/oparl/v1.0/body/0/list/paper?id=3&modified_since=1969-07-21T02%3A56%3A00%2B00%3A00"
+    } else {
+        "http://localhost:8080/oparl/v1.0/body/0/list/paper?id=3"
+    };
+
+    let page1 = object!{
+        "data" => array![],
+        "links" => object!{
+            "next" => next
+        }
+    };
+
+    let page2 = object!{
+        "data" => array![],
+        "links" => object!{}
+    };
+
+    server.add_response(url_with_time1, page1);
+    server.add_response(url_with_time2, page2);
+
+    let (add_list, receive_list) = channel();
+    let storage = storage();
+
+    let modified = if with_modified { Some(time) } else { None };
+
+    let returned = storage.parse_external_list(url.into_url().unwrap(), modified, &server, add_list).unwrap();
+
+    cleanup(&storage);
+
+    assert_eq!(returned.0, url.into_url().unwrap());
+    assert_eq!(receive_list.recv().is_err(), true);
+}
+
+#[test]
+fn run_test_parse_external_list() {
+    test_parse_external_list(false);
+    test_parse_external_list(true);
+}
+
+/// Helper for test_url_to_path
 fn for_one(url: &str, query_string: &str, path: &str, storage: &FileStorage) {
     let x = (url.to_string() + query_string).into_url().unwrap();
     assert_eq!(storage.get_cache_dir().as_path().join(path), storage.url_to_path(&x, FILE_EXTENSION));

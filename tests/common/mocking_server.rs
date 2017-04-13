@@ -12,6 +12,7 @@ pub struct MockingServer {
     responses: HashMap<Url, JsonValue>,
 }
 
+#[allow(dead_code)]
 impl MockingServer {
     pub fn new(entrypoint: Url) -> MockingServer {
         return MockingServer { entrypoint: entrypoint, responses: HashMap::new() }
