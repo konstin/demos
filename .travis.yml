@@ -8,6 +8,3 @@ rust:
 matrix:
   allow_failures:
     - rust: nightly
-
-script:
- - cargo build # TODO: Don't run it for now as there's no http mocking yet
