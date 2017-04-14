@@ -11,7 +11,8 @@ use std::path::Path;
 
 use reqwest::IntoUrl;
 
-use oparl_cache::{Cacher, FileStorage, CommonServer, DEFAULT_CACHE_STATUS_FILE};
+use oparl_cache::{Cacher, FileStorage, CommonServer};
+use oparl_cache::file_storage::DEFAULT_CACHE_STATUS_FILE;
 
 /// List the servers cached in a storage
 fn list(storage: FileStorage) -> Result<(), Box<Error>> {
@@ -68,6 +69,6 @@ fn main() {
     if let Err(err) = status {
         println!("✗ Loading failed: {}", err.description());
     } else {
-        println!("✓ Succesfully loaded to cache");
+        println!("✓ Done");
     }
 }

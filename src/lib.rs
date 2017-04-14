@@ -3,7 +3,7 @@
 //! Downloads the contents of an OParl API into a file based cache, allowing easy retrieval and
 //! incremental cache updates
 //!
-//! Note that there is a CLI so you can `cargo run` this project. See `bin/main.rs` or the main
+//! Note that there is a cli so you can `cargo run` this project. See `bin/main.rs` or the main
 //! crate for more information
 //!
 //! # Usage
@@ -27,17 +27,18 @@ extern crate reqwest;
 extern crate chrono;
 extern crate crossbeam;
 
-mod file_storage;
+pub mod file_storage;
+pub mod cacher;
+
 mod storage;
-mod constants;
 mod server;
 mod external_list;
-mod cacher;
 
-pub use file_storage::*;
-pub use storage::*;
-pub use constants::*;
-pub use server::*;
-pub use external_list::*;
-pub use cacher::*;
-pub use constants::*;
+pub use file_storage::FileStorage;
+pub use storage::Storage;
+pub use server::{Server, CommonServer};
+pub use external_list::ExternalList;
+pub use cacher::{Cacher};
+
+
+

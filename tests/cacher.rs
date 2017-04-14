@@ -10,8 +10,8 @@ use reqwest::{Url, IntoUrl};
 use std::sync::mpsc::channel;
 
 use oparl_cache::Cacher;
-use oparl_cache::Message::{List, Done};
-use oparl_cache::FILE_EXTENSION;
+use oparl_cache::cacher::Message::{List, Done};
+use oparl_cache::file_storage::FILE_EXTENSION;
 use oparl_cache::FileStorage;
 
 use common::*;

@@ -8,10 +8,19 @@ use json::JsonValue;
 use reqwest::Url;
 use reqwest::IntoUrl;
 
-use constants;
 use cacher::Cacher;
 use server::Server;
 use storage::Storage;
+
+/// This file stores information about the cache status to allow incremental updates
+pub const DEFAULT_CACHE_STATUS_FILE: &'static str = "cache_status.json";
+
+/// This file lists all cached servers
+pub const DEFAULT_CACHED_SERVERS_FILE: &'static str = "cached_servers.json";
+
+/// File extension for the downloaded objects so that they can be distingishued from directories
+pub const FILE_EXTENSION: &'static str = ".json";
+
 
 /// A Storage where every object becomes a file under a specified folder
 #[derive(Clone)]
@@ -25,7 +34,7 @@ impl<'a> Storage for FileStorage<'a> {
     /// Writes JSON to the path corresponding with the url. This will be an object and its id in the
     /// most cases
     fn write_to_cache(&self, url: &Url, object: &JsonValue) -> Result<(), Box<Error>> {
-        let filepath = self.url_to_path(url, constants::FILE_EXTENSION);
+        let filepath = self.url_to_path(url, FILE_EXTENSION);
         println!("Writen to Cache: {}", filepath.display());
 
         create_dir_all(filepath.parent().ok_or("Invalid cachepath for file")?)?;
@@ -39,7 +48,7 @@ impl<'a> Storage for FileStorage<'a> {
     ///
     /// Returns a boxed error if there was an error reading the cache file
     fn get(&self, url: &Url) -> Result<JsonValue, Box<Error>> {
-        let path = self.url_to_path(&url, constants::FILE_EXTENSION);
+        let path = self.url_to_path(&url, FILE_EXTENSION);
         let mut s = String::new();
         let mut file: File = File::open(path)?;
         file.read_to_string(&mut s)?;
@@ -72,10 +81,10 @@ impl<'a> FileStorage<'a> {
 
         assert_eq!(schema.len(), 12, "Expected 12 Schema files");
         Ok(FileStorage {
-               schema: schema,
-               cache_dir: cache_dir,
-               cache_status_file: cache_status_file,
-           })
+            schema: schema,
+            cache_dir: cache_dir,
+            cache_status_file: cache_status_file,
+        })
     }
 
     /// Returns `cache_dir`
@@ -159,7 +168,7 @@ impl<'a> FileStorage<'a> {
 
     pub fn get_cached_servers(&self) -> Result<JsonValue, Box<Error>> {
         let mut contents = String::new();
-        let path = self.get_cache_dir().join(constants::DEFAULT_CACHED_SERVERS_FILE);
+        let path = self.get_cache_dir().join(DEFAULT_CACHED_SERVERS_FILE);
         let file = File::open(&path);
 
         println!("{}", path.display());
@@ -196,6 +205,10 @@ impl<'a> Cacher for FileStorage<'a> {
                 known_lists.push((url, last_sync));
             }
             println!("External lists found in cache: {}", known_lists.len());
+            for i in known_lists.iter() {
+                println!("{}: {}", i.1.clone().unwrap_or("None".to_string()), i.0);
+            }
+            println!();
         } else {
             // We don't have a cache, so let's use an empty template
             println!("No cache found, initializing...");
@@ -203,12 +216,6 @@ impl<'a> Cacher for FileStorage<'a> {
             create_dir_all(cache_status_filepath.parent().ok_or(err)?)?;
             known_lists = Vec::new();
         }
-
-        println!("\nLoaded from cache:");
-        for i in known_lists.iter() {
-            println!("{}: {}", i.1.clone().unwrap_or("None".to_string()), i.0);
-        }
-        println!();
 
         // Write the results back to the cache
         let mut cache_status_file: File = File::create(&cache_status_filepath)?;
@@ -235,7 +242,7 @@ impl<'a> Cacher for FileStorage<'a> {
         }
 
         let mut path = self.get_cache_dir();
-        path.push(constants::DEFAULT_CACHED_SERVERS_FILE);
+        path.push(DEFAULT_CACHED_SERVERS_FILE);
         let mut file = File::create(&path)?;
         json.write_pretty(&mut file, 4)?;
 

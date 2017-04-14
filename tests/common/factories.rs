@@ -3,16 +3,16 @@ use reqwest::Url;
 use std::path::Path;
 use std::fs;
 
-use oparl_cache::{FileStorage, DEFAULT_CACHE_STATUS_FILE};
+use oparl_cache::{FileStorage};
+use oparl_cache::file_storage::DEFAULT_CACHE_STATUS_FILE;
 
 use super::rand::Rng;
-use super::rand;
+use super::rand::thread_rng;
 use super::MockingServer;
-
 
 #[allow(dead_code)]
 pub fn storage<'a>() -> FileStorage<'a> {
-    let uid = rand::thread_rng()
+    let uid = thread_rng()
         .gen_ascii_chars()
         .take(8)
         .collect::<String>();
