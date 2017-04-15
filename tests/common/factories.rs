@@ -4,7 +4,7 @@ use std::path::Path;
 use std::fs;
 
 use oparl_cache::{FileStorage};
-use oparl_cache::file_storage::DEFAULT_CACHE_STATUS_FILE;
+use oparl_cache::file_storage::CACHE_STATUS_FILE;
 
 use super::rand::Rng;
 use super::rand::thread_rng;
@@ -21,7 +21,7 @@ pub fn storage<'a>() -> FileStorage<'a> {
 
     FileStorage::new(Path::new("oparl/schema"),
                      path,
-                     DEFAULT_CACHE_STATUS_FILE)
+                     CACHE_STATUS_FILE)
             .unwrap()
 }
 

@@ -12,7 +12,7 @@ use std::path::Path;
 use reqwest::IntoUrl;
 
 use oparl_cache::{Cacher, FileStorage, CommonServer};
-use oparl_cache::file_storage::DEFAULT_CACHE_STATUS_FILE;
+use oparl_cache::file_storage::CACHE_STATUS_FILE;
 
 /// List the servers cached in a storage
 fn list(storage: FileStorage) -> Result<(), Box<Error>> {
@@ -42,7 +42,7 @@ fn main() {
     let cachedir = matches.value_of("cachedir").unwrap_or("/home/konsti/cache-rust/");
     let schemadir = matches.value_of("schemadir").unwrap_or("/home/konsti/oparl/schema/");
     let cache_status_file = matches.value_of("cache_status_file")
-        .unwrap_or(DEFAULT_CACHE_STATUS_FILE);
+        .unwrap_or(CACHE_STATUS_FILE);
 
     let entrypoint = match entrypoint.into_url() {
         Ok(ok) => ok,

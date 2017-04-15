@@ -13,16 +13,29 @@ use server::Server;
 use storage::Storage;
 
 /// This file stores information about the cache status to allow incremental updates
-pub const DEFAULT_CACHE_STATUS_FILE: &'static str = "cache_status.json";
+pub const CACHE_STATUS_FILE: &'static str = "cache_status.json";
 
 /// This file lists all cached servers
-pub const DEFAULT_CACHED_SERVERS_FILE: &'static str = "cached_servers.json";
+pub const CACHED_SERVERS_FILE: &'static str = "cached_servers.json";
 
 /// File extension for the downloaded objects so that they can be distingishued from directories
 pub const FILE_EXTENSION: &'static str = ".json";
 
 
 /// A Storage where every object becomes a file under a specified folder
+///
+/// # Implementation
+///
+/// The cache is essentially a folder with all objects, lists and metadata stored in json file
+/// somewhere inside that folder. At the top level, there is one file (CACHED_SERVERS_FILE)
+/// that contains a list of all cached servers.
+///
+/// For each cached server, there is a folder for the entrypoint, containing a json file with
+/// information about last successfull updates of each external list.
+///
+/// Embedded objects are extracted from their parent and stored under their id. For external lists
+/// only the ids of the elements are stored.
+///
 #[derive(Clone)]
 pub struct FileStorage<'a> {
     schema: JsonValue,
@@ -166,9 +179,11 @@ impl<'a> FileStorage<'a> {
         cachefile
     }
 
+    /// Returns a json that should contain a list of the entrypoints of the servers stored in this
+    /// cache folder
     pub fn get_cached_servers(&self) -> Result<JsonValue, Box<Error>> {
         let mut contents = String::new();
-        let path = self.get_cache_dir().join(DEFAULT_CACHED_SERVERS_FILE);
+        let path = self.get_cache_dir().join(CACHED_SERVERS_FILE);
         let file = File::open(&path);
 
         println!("{}", path.display());
@@ -242,7 +257,7 @@ impl<'a> Cacher for FileStorage<'a> {
         }
 
         let mut path = self.get_cache_dir();
-        path.push(DEFAULT_CACHED_SERVERS_FILE);
+        path.push(CACHED_SERVERS_FILE);
         let mut file = File::create(&path)?;
         json.write_pretty(&mut file, 4)?;
 

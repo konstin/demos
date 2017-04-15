@@ -8,18 +8,22 @@
 //!
 //! # Usage
 //!
-//! FIXME
+//! Currently the only available storage is the FileStorage, which stores the data in a user-defined
+//! folder:
 //!
-//! # Implementation
+//! ```rust,ignore
+//! use oparl_cache::{CommonServer, FileStorage, Cacher, IntoUrl};
+//! use oparl_cache::file_storage::CACHE_STATUS_FILE;
+//! use std::path::Path;
 //!
-//! The cache directory contains a folder for each server, with each of these folder folder
-//! containing a file with the last successfull update of an external list. All OParl entities are
-//! stored in that folder, while the exact location is a reformatted version of the url.
-//! For external lists only the ids of the elements are stored.
-//!
+//! let server = CommonServer::new("https://example.com/entrypoint".into_url().unwrap());
+//! let storage = FileStorage::new(Path::new("path/to/oparl/schema"),
+//!                                Path::new("path/to/cachedir").to_owned(),
+//!                                CACHE_STATUS_FILE).unwrap();
+//! storage.cache(server).unwrap();
+//! ```
 
-//FIXME
-//#![warn(missing_docs)]
+#![warn(missing_docs)]
 
 #[macro_use]
 extern crate json;
@@ -27,7 +31,9 @@ extern crate reqwest;
 extern crate chrono;
 extern crate crossbeam;
 
+/// Contains the FileStorage struct with some associated constants
 pub mod file_storage;
+/// Contains the Cacher trait with a Message type
 pub mod cacher;
 
 mod storage;
@@ -39,6 +45,12 @@ pub use storage::Storage;
 pub use server::{Server, CommonServer};
 pub use external_list::ExternalList;
 pub use cacher::{Cacher};
+
+/// Reexported from reqwest
+pub use reqwest::IntoUrl;
+/// Reexported from reqwest
+pub use reqwest::Url;
+
 
 
 

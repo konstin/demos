@@ -12,6 +12,7 @@ use std::io::Read;
 pub trait Server: Send + Sync {
     /// Returns a freshly loaded object as json
     fn get_json(&self, url: Url) -> Result<JsonValue, Box<Error>>;
+    /// Returns the entrypoint for the server
     fn get_entrypoint(&self) -> Url;
 }
 

@@ -17,7 +17,9 @@ use external_list::ExternalList;
 /// The type of the messages send from the worker to main thread
 #[derive(Debug)]
 pub enum Message {
+    /// Contains the url of an external list that was found in a worker thread
     List(Url),
+    /// Tells the main thread that one worker is done
     Done,
 }
 
