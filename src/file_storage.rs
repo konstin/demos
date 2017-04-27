@@ -41,6 +41,7 @@ pub struct FileStorage<'a> {
     schema: JsonValue,
     cache_dir: PathBuf,
     cache_status_file: &'a str,
+    cached_servers_file: &'a str,
 }
 
 impl<'a> Storage for FileStorage<'a> {
@@ -78,8 +79,7 @@ impl<'a> Storage for FileStorage<'a> {
 impl<'a> FileStorage<'a> {
     /// Creates a new `Storage`
     pub fn new(schema_dir: &Path,
-               cache_dir: PathBuf,
-               cache_status_file: &'a str)
+               cache_dir: PathBuf)
                -> Result<FileStorage<'a>, Box<Error>> {
         // Load the schema
         let mut schema = JsonValue::new_array();
@@ -96,7 +96,8 @@ impl<'a> FileStorage<'a> {
         Ok(FileStorage {
             schema: schema,
             cache_dir: cache_dir,
-            cache_status_file: cache_status_file,
+            cache_status_file: CACHE_STATUS_FILE,
+            cached_servers_file: CACHED_SERVERS_FILE
         })
     }
 
@@ -108,6 +109,16 @@ impl<'a> FileStorage<'a> {
     /// Returns `cache_status_file`
     pub fn get_cache_status_file(&self) -> &'a str {
         self.cache_status_file
+    }
+
+    /// Overrides the default cache_status_file value
+    pub fn override_cache_status_file(&mut self, cache_status_file: &'a str) {
+        self.cache_status_file = cache_status_file;
+    }
+
+    /// Overrides the default cached_servers_file value
+    pub fn override_cached_servers_file(&mut self, cached_servers_file: &'a str) {
+        self.cached_servers_file = cached_servers_file;
     }
 
     /// Takes an `url` and returns the corresponding cache path in the form
@@ -183,7 +194,7 @@ impl<'a> FileStorage<'a> {
     /// cache folder
     pub fn get_cached_servers(&self) -> Result<JsonValue, Box<Error>> {
         let mut contents = String::new();
-        let path = self.get_cache_dir().join(CACHED_SERVERS_FILE);
+        let path = self.get_cache_dir().join(self.cached_servers_file);
         let file = File::open(&path);
 
         println!("{}", path.display());
@@ -257,7 +268,7 @@ impl<'a> Cacher for FileStorage<'a> {
         }
 
         let mut path = self.get_cache_dir();
-        path.push(CACHED_SERVERS_FILE);
+        path.push(self.cached_servers_file);
         let mut file = File::create(&path)?;
         json.write_pretty(&mut file, 4)?;
 

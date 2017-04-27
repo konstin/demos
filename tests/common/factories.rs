@@ -4,7 +4,6 @@ use std::path::Path;
 use std::fs;
 
 use oparl_cache::{FileStorage};
-use oparl_cache::file_storage::CACHE_STATUS_FILE;
 
 use super::rand::Rng;
 use super::rand::thread_rng;
@@ -20,11 +19,11 @@ pub fn storage<'a>() -> FileStorage<'a> {
     let path = Path::new("/tmp").join("cache-rust-".to_owned() + &uid);
 
     FileStorage::new(Path::new("oparl/schema"),
-                     path,
-                     CACHE_STATUS_FILE)
+                     path)
             .unwrap()
 }
 
+/// Mocking Server with a stub System-object under `url`
 #[allow(dead_code)]
 pub fn mocking_server(url: Url) -> MockingServer {
     let mut server = MockingServer::new(url.clone());

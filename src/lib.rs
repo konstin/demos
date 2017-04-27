@@ -18,8 +18,7 @@
 //!
 //! let server = CommonServer::new("https://example.com/entrypoint".into_url().unwrap());
 //! let storage = FileStorage::new(Path::new("path/to/oparl/schema"),
-//!                                Path::new("path/to/cachedir").to_owned(),
-//!                                CACHE_STATUS_FILE).unwrap();
+//!                                Path::new("path/to/cachedir").to_owned()).unwrap();
 //! storage.cache(server).unwrap();
 //! ```
 

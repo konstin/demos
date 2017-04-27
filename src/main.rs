@@ -12,7 +12,6 @@ use std::path::Path;
 use reqwest::IntoUrl;
 
 use oparl_cache::{Cacher, FileStorage, CommonServer};
-use oparl_cache::file_storage::CACHE_STATUS_FILE;
 
 /// List the servers cached in a storage
 fn list(storage: FileStorage) -> Result<(), Box<Error>> {
@@ -30,8 +29,6 @@ fn main() {
         (@arg entrypoint: "The url of the entrypoint")
         (@arg cachedir: -c --cache "The directory where the API responses will be saved")
         (@arg schemadir: -s --schema "The path of the folder with the OParl schema")
-        (@arg cache_status_file: --cachestatus "The file where the information concerning the \
-                                                 cache status gets stored")
         (@subcommand list =>
             (about: "List the servers cached in this storage")
         )
@@ -41,8 +38,6 @@ fn main() {
     let entrypoint = matches.value_of("entrypoint").unwrap_or("http://localhost:8080/oparl/v1.0/");
     let cachedir = matches.value_of("cachedir").unwrap_or("/home/konsti/cache-rust/");
     let schemadir = matches.value_of("schemadir").unwrap_or("/home/konsti/oparl/schema/");
-    let cache_status_file = matches.value_of("cache_status_file")
-        .unwrap_or(CACHE_STATUS_FILE);
 
     let entrypoint = match entrypoint.into_url() {
         Ok(ok) => ok,
@@ -54,7 +49,7 @@ fn main() {
     };
 
     let server = CommonServer::new(entrypoint);
-    let storage = FileStorage::new(Path::new(schemadir), Path::new(cachedir).to_owned(), cache_status_file).unwrap();
+    let storage = FileStorage::new(Path::new(schemadir), Path::new(cachedir).to_owned()).unwrap();
 
     if matches.is_present("list") {
         let result = list(storage);
