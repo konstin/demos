@@ -11,7 +11,7 @@ use oparl_cache::Cacher;
 
 use reqwest::IntoUrl;
 
-/// Tests the cached server status method
+/// Assert that the cached server status method returns the correct list
 #[test]
 fn test_cached_server_list() {
     let url1 = "http://example1.com/";

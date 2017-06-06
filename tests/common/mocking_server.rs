@@ -30,7 +30,6 @@ impl MockingServer {
 
 impl Server for MockingServer {
     fn get_json(&self, url: Url) -> Result<JsonValue, Box<Error>> {
-        println!("{}", url.as_str());
         Ok(self.responses[&url].clone())
     }
 

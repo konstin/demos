@@ -13,7 +13,7 @@ use oparl_cache::ExternalList;
 use common::*;
 
 
-/// Check whether iterating over a simple external list with an empty returns the right object ids
+/// Assert that iterating over a simple external list with an empty returns the right object ids
 #[test]
 fn external_list() {
     let expected_ids = ["http://oparl.tld/0",
@@ -51,3 +51,4 @@ fn external_list() {
     let ids = list.map(|i| i.unwrap()["id"].to_owned()).collect::<Vec<_>>();
     assert_eq!(ids, expected_ids);
 }
+

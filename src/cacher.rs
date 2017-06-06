@@ -102,7 +102,8 @@ pub trait Cacher: Storage + Sync {
 
         let list = ExternalList::new(Url::parse(url_with_filters.as_str())?, server);
 
-        let mut urls = Vec::new();
+        // A Vec is used instead of a Set as we want to preserve the ordering
+        let mut urls: Vec<String> = Vec::new();
 
         for i in list {
             let mut i: JsonValue = i?;
@@ -111,8 +112,12 @@ pub trait Cacher: Storage + Sync {
                 println!("Invalid object: {}", err);
                 i.write_pretty(&mut stdout(), 4).unwrap();
                 println!("Skipping the above object");
+                continue;
             }
-            urls.push(i["id"].to_string());
+            let value = i["id"].to_string();
+            if !urls.contains(&value) {
+                urls.push(value);
+            }
         }
 
         // Get the the lists cached in the last run
@@ -132,12 +137,17 @@ pub trait Cacher: Storage + Sync {
             return Err(From::from(format!("Invalid cache for {}", url_with_filters)));
         }
 
-        for i in urls {
-            urls_as_json.push(i)?;
+        for mut i in urls_as_json.members_mut() {
+            let value = i.take_string().unwrap();
+            if !urls.contains(&value) {
+                urls.push(value);
+            }
         }
 
+        let urls_as_vec = urls.into_iter().map(|x| JsonValue::String(x)).collect();
+        let urls_new_json = JsonValue::Array(urls_as_vec);
 
-        self.write_to_cache(&url_with_filters, &urls_as_json)?;
+        self.write_to_cache(&url_with_filters, &urls_new_json)?;
 
         Ok((url_without_filters, Some(this_sync)))
     }
@@ -155,7 +165,7 @@ pub trait Cacher: Storage + Sync {
         // Avoid doing same list more than once
         let mut done: Vec<Url> = vec![];
 
-        // Keep track of how many threads there are so they function can exit all have finished
+        // Keep track of how many threads there are so the function can exit when all have finished
         let mut threadcounter: usize = 0;
 
         let mut queue = VecDeque::new();
@@ -175,6 +185,12 @@ pub trait Cacher: Storage + Sync {
             println!("Aborting");
             return vec![];
         };
+
+        for i in receive_list.try_iter() {
+            if let Message::List(url) = i {
+                queue.push_back((url, None));
+            }
+        }
 
         if queue.is_empty() {
             println!("Warn: No external lists found");

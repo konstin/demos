@@ -14,10 +14,11 @@ use oparl_cache::Cacher;
 use oparl_cache::cacher::Message::{List, Done};
 use oparl_cache::file_storage::FILE_EXTENSION;
 use oparl_cache::FileStorage;
+use oparl_cache::Storage;
 
 use common::*;
 
-/// Ensure that an embedded object will be properly extracted from a parent object
+/// Assert that an embedded object will be properly extracted from a parent object
 #[test]
 fn parse_object_and_extract_embedded_object() {
     let mut input = object! {
@@ -51,7 +52,7 @@ fn parse_object_and_extract_embedded_object() {
     assert_eq!(receive_list.recv().is_err(), true);
 }
 
-/// Ensure that parse_object ignores embedded geojson objects
+/// Assert that parse_object ignores embedded geojson objects
 #[test]
 fn parse_object_ignore_geojson() {
     let mut input = object!{
@@ -76,7 +77,7 @@ fn parse_object_ignore_geojson() {
     assert_eq!(receive_list.recv().is_err(), true);
 }
 
-/// Ensure that all links to external lists are extracted from objects
+/// Assert that all links to external lists are extracted from objects
 #[test]
 fn parse_object_find_external_list() {
     let mut input = object! {
@@ -86,7 +87,7 @@ fn parse_object_find_external_list() {
             object! {
                 "id" => "http://localhost:8080/oparl/v1.0/legislativeterm/0",
                 "type" => "https://schema.oparl.org/1.0/LegislativeTerm",
-                "name" => "Unbekannt"
+                "name" => "Unknown"
             }
         ],
         "organization" => "http://localhost:8080/oparl/v1.0/body/0/list/organization",
@@ -125,7 +126,6 @@ fn parse_object_find_external_list() {
     assert_eq!(results, expected_lists);
 }
 
-///
 fn test_parse_external_list(with_modified: bool) {
     let base_url = "http://localhost:8080/oparl/v1.0".into_url().unwrap();
     let mut server = mocking_server(base_url);
@@ -178,6 +178,7 @@ fn test_parse_external_list(with_modified: bool) {
     assert_eq!(receive_list.recv().is_err(), true);
 }
 
+/// Runs test_parse_external_list with different configurations
 #[test]
 fn run_test_parse_external_list() {
     test_parse_external_list(false);
@@ -192,6 +193,7 @@ fn for_one(url: &str, query_string: &str, path: &str, storage: &FileStorage) {
     assert_eq!(storage.get_cache_dir().as_path().join(path), storage.url_to_path(&y, FILE_EXTENSION));
 }
 
+/// Assert that the url to path transformation works as indended
 #[test]
 fn test_url_to_path() {
     let storage = storage();
@@ -223,5 +225,115 @@ fn test_url_to_path() {
             &storage);
 
     cleanup(&storage);
+}
 
+/// Assert that incremental updates on external lists work
+#[test]
+fn test_parse_external_list_incremental() {
+    let storage = storage();
+    let list_url = "https://example.com/list";
+
+    // Add the before-update state
+    let server = mocking_server("https://example.com/".into_url().unwrap())
+        .with_response(
+            list_url.clone(),
+            object!{
+                "data" => array![
+                    object!{
+                        "id" => "https://example.com/0",
+                        "key" => "old value"
+                    },
+                    object!{
+                        "id" => "https://example.com/1",
+                        "key" => "old value"
+                    }
+                ],
+                "links" => object!{
+                    "next" => "https://example.com/list/next_page"
+                }
+            }
+        ).with_response(
+            &(list_url.to_string() + "/next_page"),
+            object!{
+                "data" => array![
+                    object!{
+                        "id" => "https://example.com/3",
+                        "key" => "old value"
+                    },
+                    object!{
+                        "id" => "https://example.com/4",
+                        "key" => "old value"
+                    }
+                ],
+                "links" => object!{
+                    // Last page
+                }
+            }
+        );
+
+    let (_, update) = storage.parse_external_list(list_url.into_url().unwrap(), None, &server, channel().0).unwrap();
+    let timestamp = update.unwrap();
+
+    let url_modified = Url::parse_with_params(list_url, &[("modified_since", &timestamp)]).unwrap();
+    let url2_modified = Url::parse_with_params(&(list_url.to_string() + "/next_page"), &[("modified_since", &timestamp)]).unwrap();
+
+    // Now that we know the update timestamp, we can add the updated response
+    let server = server.with_response(
+        url_modified,
+        object!{
+            "data" => array![
+                object!{
+                    "id" => "https://example.com/1",
+                    "key" => "new value"
+                },
+                object!{
+                    "id" => "https://example.com/2",
+                    "key" => "new value"
+                }
+            ],
+            "links" => object!{
+                "next" => url2_modified.to_string()
+            }
+        }
+    ).with_response(
+        url2_modified,
+        object!{
+            "data" => array![
+                object!{
+                    "id" => "https://example.com/4",
+                    "key" => "new value"
+                },
+                object!{
+                    "id" => "https://example.com/5",
+                    "key" => "new value"
+                }
+            ],
+            "links" => object!{
+                // Last page
+            }
+        }
+    );
+
+    storage.parse_external_list(list_url.into_url().unwrap(), Some(timestamp), &server, channel().0).unwrap();
+
+    let expected_list = vec![
+        "https://example.com/1",
+        "https://example.com/2",
+        "https://example.com/4",
+        "https://example.com/5",
+        "https://example.com/0",
+        "https://example.com/3"
+    ];
+
+    let url = "https://example.com/list".into_url().unwrap();
+    assert_eq!(storage.get(&url).unwrap().members().map(|x| x.as_str().unwrap()).collect::<Vec<_>>(), expected_list);
+
+    let get_key = |url: &str| storage.get(&url.into_url().unwrap()).unwrap().take()["key"].take_string().unwrap();
+
+    assert_eq!(get_key("https://example.com/0"), "old value");
+    assert_eq!(get_key("https://example.com/1"), "new value");
+    assert_eq!(get_key("https://example.com/2"), "new value");
+    assert_eq!(get_key("https://example.com/3"), "old value");
+    assert_eq!(get_key("https://example.com/4"), "new value");
+    assert_eq!(get_key("https://example.com/5"), "new value");
 }
