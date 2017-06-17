@@ -13,6 +13,16 @@ clap = "^2.24.0"
 crossbeam = "^0.2.0"
 json = "^0.11.0"
 rand = "^0.3.15"
-reqwest = "^0.6.0"
 serde = "^1.0.8"
 serde_json = "1.0.2"
+
+[dependencies.reqwest]
+version = "0.6.2"
+
+[dependencies.url]
+version = "=1.4.0"
+features = ["serde1"]
+
+[replace."url:1.4.0"]
+git = "https://github.com/dtolnay/url"
+branch = "serde"

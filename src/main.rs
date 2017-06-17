@@ -17,8 +17,8 @@ use oparl_cache::{Cacher, FileStorage, CommonServer};
 fn list(storage: FileStorage) -> Result<(), Box<Error>> {
     let servers = storage.get_cached_servers()?;
     println!("The following servers have been cached:");
-    for i in servers.members() {
-        println!(" - {}", i.as_str().ok_or("The entry isn't a url")?);
+    for i in servers {
+        println!(" - {}", &i)
     }
     return Ok(());
 }

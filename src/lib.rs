@@ -29,6 +29,8 @@ extern crate json;
 extern crate reqwest;
 extern crate chrono;
 extern crate crossbeam;
+extern crate serde;
+extern crate serde_json;
 
 /// Contains the FileStorage struct with some associated constants
 pub mod file_storage;

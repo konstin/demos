@@ -7,6 +7,7 @@ use json;
 use json::JsonValue;
 use reqwest::Url;
 use reqwest::IntoUrl;
+use serde_json;
 
 use cacher::Cacher;
 use server::Server;
@@ -192,20 +193,13 @@ impl<'a> FileStorage<'a> {
 
     /// Returns a json that should contain a list of the entrypoints of the servers stored in this
     /// cache folder
-    pub fn get_cached_servers(&self) -> Result<JsonValue, Box<Error>> {
-        let mut contents = String::new();
+    pub fn get_cached_servers(&self) -> Result<Vec<Url>, Box<Error>> {
         let path = self.get_cache_dir().join(self.cached_servers_file);
         let file = File::open(&path);
-
         println!("{}", path.display());
 
-        if let Ok(mut file) = file {
-            file.read_to_string(&mut contents)?;
-            let json = json::parse(&contents)?;
-            return Ok(json);
-        } else {
-            return Ok(JsonValue::new_array());
-        }
+        let x: Vec<Url> = serde_json::from_reader(file?)?;
+        Ok(x)
     }
 }
 
@@ -259,18 +253,18 @@ impl<'a> Cacher for FileStorage<'a> {
         cache_status_json.write_pretty(&mut cache_status_file, 4)?;
 
         // After successful caching, add this server to the list of cached servers
-        let mut json = self.get_cached_servers()?;
+        let mut servers = self.get_cached_servers()?;
 
         let entrypoint = server.get_entrypoint();
-        if !json.contains(entrypoint.as_str()) {
+        if !servers.contains(&entrypoint) {
             println!("Adding server to known servers");
-            json.push(entrypoint.as_str())?;
+            servers.push(entrypoint);
         }
 
         let mut path = self.get_cache_dir();
         path.push(self.cached_servers_file);
-        let mut file = File::create(&path)?;
-        json.write_pretty(&mut file, 4)?;
+        let file = File::create(&path)?;
+        serde_json::to_writer_pretty(file, &servers)?;
 
         Ok(())
     }
