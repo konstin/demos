@@ -8,6 +8,7 @@ use json::JsonValue;
 use reqwest::Url;
 use reqwest::IntoUrl;
 use serde_json;
+use serde_json::Error as SerdeError;
 
 use cacher::Cacher;
 use server::Server;
@@ -193,13 +194,15 @@ impl<'a> FileStorage<'a> {
 
     /// Returns a json that should contain a list of the entrypoints of the servers stored in this
     /// cache folder
-    pub fn get_cached_servers(&self) -> Result<Vec<Url>, Box<Error>> {
+    pub fn get_cached_servers(&self) -> Result<Vec<Url>, SerdeError> {
         let path = self.get_cache_dir().join(self.cached_servers_file);
-        let file = File::open(&path);
         println!("{}", path.display());
+        let file = File::open(&path);
 
-        let x: Vec<Url> = serde_json::from_reader(file?)?;
-        Ok(x)
+        return Ok(match file {
+            Ok(ok) => serde_json::from_reader(ok)?,
+            Err(_) => vec![],
+        });
     }
 }
 

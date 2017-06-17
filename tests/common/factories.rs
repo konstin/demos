@@ -27,8 +27,8 @@ pub fn storage<'a>() -> FileStorage<'a> {
 #[allow(dead_code)]
 pub fn mocking_server(url: Url) -> MockingServer {
     let mut server = MockingServer::new(url.clone());
-    server.add_response(url, object!{
-        "id" => "http://example.com",
+    server.add_response(url.clone(), object!{
+        "id" => url.as_str(),
         "type" => "https://spec.oparl.org/1.0/System"
     });
     server
