@@ -12,6 +12,7 @@ use chrono::Local;
 
 use server::Server;
 use storage::Storage;
+use file_storage::{CacheStatus, UrlWithTimestamp};
 use external_list::ExternalList;
 
 /// The type of the messages send from the worker to main thread
@@ -158,8 +159,8 @@ pub trait Cacher: Storage + Sync {
     /// the child threads
     fn load_all_external_lists<T: Server>(&self,
                                           server: &T,
-                                          known: &Vec<(Url, Option<String>)>)
-                                          -> Vec<(Url, Option<String>)> {
+                                          known: &CacheStatus)
+                                          -> CacheStatus {
         let mut thread_handles = vec![];
 
         // Avoid doing same list more than once
@@ -168,9 +169,9 @@ pub trait Cacher: Storage + Sync {
         // Keep track of how many threads there are so the function can exit when all have finished
         let mut threadcounter: usize = 0;
 
-        let mut queue = VecDeque::new();
+        let mut queue: VecDeque<UrlWithTimestamp> = VecDeque::new();
         for i in known {
-            queue.push_back(i.clone())
+            queue.push_back(i.clone());
         }
 
         let (add_list, receive_list) = channel::<Message>();
@@ -188,7 +189,7 @@ pub trait Cacher: Storage + Sync {
 
         for i in receive_list.try_iter() {
             if let Message::List(url) = i {
-                queue.push_back((url, None));
+                queue.push_back(UrlWithTimestamp {url: url, last_sync: None});
             }
         }
 
@@ -200,12 +201,12 @@ pub trait Cacher: Storage + Sync {
         crossbeam::scope(|scope| {
             loop {
                 // Searches for new lists or exits when all workers finshed
-                let (ref url, ref last_update): (Url, Option<String>) = {
+                let UrlWithTimestamp {url, last_sync: last_update} = {
                     if let Some(queued) = queue.pop_front() {
                         queued
                     } else {
                         match receive_list.recv_timeout(Duration::from_secs(10)) {
-                            Ok(Message::List(url)) => (url, None),
+                            Ok(Message::List(url)) => UrlWithTimestamp {url: url, last_sync: None},
                             Ok(Message::Done) => {
                                 threadcounter -= 1;
                                 if threadcounter == 0 { break } else { continue }
@@ -253,7 +254,7 @@ pub trait Cacher: Storage + Sync {
             match thread.join() {
                 Ok(list) => {
                     println!("Success: {}", &list.0);
-                    new_cache_status.push(list);
+                    new_cache_status.push(UrlWithTimestamp {url: list.0, last_sync: list.1});
                 }
                 Err(err) => println!("Failed: {}", err),
             }

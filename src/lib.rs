@@ -31,6 +31,7 @@ extern crate chrono;
 extern crate crossbeam;
 extern crate serde;
 extern crate serde_json;
+#[macro_use] extern crate serde_derive;
 
 /// Contains the FileStorage struct with some associated constants
 pub mod file_storage;

@@ -6,7 +6,6 @@ use std::error::Error;
 use json;
 use json::JsonValue;
 use reqwest::Url;
-use reqwest::IntoUrl;
 use serde_json;
 use serde_json::Error as SerdeError;
 
@@ -22,6 +21,14 @@ pub const CACHED_SERVERS_FILE: &'static str = "cached_servers.json";
 
 /// File extension for the downloaded objects so that they can be distingishued from directories
 pub const FILE_EXTENSION: &'static str = ".json";
+
+/// Helper Struct for deserializing the cache Status files
+#[derive(Serialize, Deserialize, Clone)]
+pub struct UrlWithTimestamp {
+    pub url: Url,
+    pub last_sync: Option<String>
+}
+pub type CacheStatus = Vec<UrlWithTimestamp>;
 
 
 /// A Storage where every object becomes a file under a specified folder
@@ -213,23 +220,17 @@ impl<'a> Cacher for FileStorage<'a> {
         let entrypoint_path = self.url_to_path(&server.get_entrypoint(), "");
         let cache_status_filepath = entrypoint_path.join(self.get_cache_status_file());
         println!("Cache Status File: {}", &cache_status_filepath.display());
-        let mut known_lists: Vec<(Url, Option<String>)>;
+        let known_lists: CacheStatus;
 
         if cache_status_filepath.exists() {
             // We have a cache, so let's load it
             println!("Cache found, updating...");
             let mut cache_status_file = File::open(&cache_status_filepath)?;
-            let mut read = String::new();
-            cache_status_file.read_to_string(&mut read)?;
-            known_lists = vec![];
-            for i in json::parse(&read)?.members() {
-                let url = i["url"].as_str().ok_or("invalid cache status file")?.into_url()?;
-                let last_sync = Some(i["last_sync"].to_string());
-                known_lists.push((url, last_sync));
-            }
+            known_lists = serde_json::from_reader(&mut cache_status_file)?;
+
             println!("External lists found in cache: {}", known_lists.len());
             for i in known_lists.iter() {
-                println!("{}: {}", i.1.clone().unwrap_or("None".to_string()), i.0);
+                println!("{}: {:?}", i.url, i.last_sync);
             }
             println!();
         } else {
@@ -241,19 +242,9 @@ impl<'a> Cacher for FileStorage<'a> {
         }
 
         // Write the results back to the cache
-        let mut cache_status_file: File = File::create(&cache_status_filepath)?;
-        let mut cache_status_json = JsonValue::new_array();
-
-        // Here the actual work is done
-        let mut new_cache_status = self.load_all_external_lists(&server, &known_lists);
-        for i in new_cache_status.drain(..) {
-            cache_status_json.push(object! {
-                "url" => JsonValue::from(i.0.to_string()),
-                "last_sync" => JsonValue::from(i.1)
-            })?;
-        }
-
-        cache_status_json.write_pretty(&mut cache_status_file, 4)?;
+        let mut cache_status_file = File::create(&cache_status_filepath)?;
+        let new_cache_status = self.load_all_external_lists(&server, &known_lists);
+        serde_json::to_writer_pretty(&mut cache_status_file, &new_cache_status)?;
 
         // After successful caching, add this server to the list of cached servers
         let mut servers = self.get_cached_servers()?;
