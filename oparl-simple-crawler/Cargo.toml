@@ -1,0 +1,13 @@
+[package]
+authors = ["konstin <konstin@mailbox.org>"]
+name = "crawler"
+version = "0.1.0"
+
+[dependencies]
+hyper = "0.9.9"
+json = "0.10.2"
+regex = "0.1.77"
+time = "0.1"
+
+[dependencies.url]
+git = "https://github.com/servo/rust-url"
