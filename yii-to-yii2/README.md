@@ -1,0 +1,1 @@
+This script was meant to automate most of the yii 1 to yii 2 upgrade using regular expressions. Despite some presentable results it turned out that the outdated framework wasn't the real problem of the code and that regexes (surprinsingly) aren't the best way to parse php. So this script is abandoned and left here only because there's no point in deleting it.
