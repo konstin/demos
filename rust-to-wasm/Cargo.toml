@@ -1,0 +1,7 @@
+[package]
+authors = ["konstin <konstin@mailbox.org>"]
+name = "rweb"
+version = "0.1.0"
+
+[dependencies]
+stdweb = "0.1.3"
