@@ -1,0 +1,410 @@
+{
+    "rgs": {
+        "type": "String",
+        "property": "P82"
+    },
+    "mimeType": {
+        "type": "String",
+        "property": "P58"
+    },
+    "paperType": {
+        "type": "String",
+        "property": "P120"
+    },
+    "votingRight": {
+        "type": "String",
+        "property": "P103"
+    },
+    "body": {
+        "type": "URL",
+        "property": "P46"
+    },
+    "status": {
+        "type": "String",
+        "property": "P43"
+    },
+    "role": {
+        "type": "String",
+        "property": "P86"
+    },
+    "id": {
+        "type": "URL",
+        "property": "P641"
+    },
+    "auxiliaryFile": {
+        "type": "String",
+        "property": "P26"
+    },
+    "consultation": {
+        "type": "URL",
+        "property": "P15"
+    },
+    "fileName": {
+        "type": "String",
+        "property": "P66"
+    },
+    "participant": {
+        "type": "String",
+        "property": "P105"
+    },
+    "underDirectionOf": {
+        "type": "String",
+        "property": "P116"
+    },
+    "ags": {
+        "type": "String",
+        "property": "P72"
+    },
+    "derivativeFile": {
+        "type": "String",
+        "property": "P56"
+    },
+    "start": {
+        "type": "String",
+        "property": "P17"
+    },
+    "website": {
+        "type": "URL",
+        "property": "P83"
+    },
+    "room": {
+        "type": "String",
+        "property": "P94"
+    },
+    "text": {
+        "type": "String",
+        "property": "P68"
+    },
+    "verbatimProtocol": {
+        "type": "String",
+        "property": "P107"
+    },
+    "reference": {
+        "type": "String",
+        "property": "P118"
+    },
+    "externalBody": {
+        "type": "URL",
+        "property": "P100"
+    },
+    "contactName": {
+        "type": "String",
+        "property": "P84"
+    },
+    "life": {
+        "type": "String",
+        "property": "P51"
+    },
+    "licenseValidSince": {
+        "type": "String",
+        "property": "P78"
+    },
+    "formOfAddress": {
+        "type": "String",
+        "property": "P45"
+    },
+    "startDate": {
+        "type": "String",
+        "property": "P69"
+    },
+    "streetAddress": {
+        "type": "String",
+        "property": "P91"
+    },
+    "shortName": {
+        "type": "String",
+        "property": "P76"
+    },
+    "system": {
+        "type": "URL",
+        "property": "P532"
+    },
+    "lifeSource": {
+        "type": "String",
+        "property": "P47"
+    },
+    "locality": {
+        "type": "String",
+        "property": "P88"
+    },
+    "end": {
+        "type": "String",
+        "property": "P32"
+    },
+    "superordinatedPaper": {
+        "type": "String",
+        "property": "P122"
+    },
+    "phone": {
+        "type": "String",
+        "property": "P39"
+    },
+    "classification": {
+        "type": "String",
+        "property": "P75"
+    },
+    "sha512Checksum": {
+        "type": "String",
+        "property": "P60"
+    },
+    "created": {
+        "type": "String",
+        "property": "P38"
+    },
+    "modified": {
+        "type": "time",
+        "property": "P1387"
+    },
+    "equivalent": {
+        "type": "String",
+        "property": "P74"
+    },
+    "resolutionText": {
+        "type": "String",
+        "property": "P28"
+    },
+    "person": {
+        "type": "URL",
+        "property": "P81"
+    },
+    "downloadUrl": {
+        "type": "URL",
+        "property": "P55"
+    },
+    "paper": {
+        "type": "String",
+        "property": "P59"
+    },
+    "post": {
+        "type": "String",
+        "property": "P99"
+    },
+    "givenName": {
+        "type": "String",
+        "property": "P53"
+    },
+    "authoritative": {
+        "type": "String",
+        "property": "P85"
+    },
+    "onBehalfOf": {
+        "type": "URL",
+        "property": "P102"
+    },
+    "subLocality": {
+        "type": "String",
+        "property": "P90"
+    },
+    "description": {
+        "type": "String",
+        "property": "P92"
+    },
+    "otherOparlVersions": {
+        "type": "String",
+        "property": "P110"
+    },
+    "deleted": {
+        "type": "String",
+        "property": "P41"
+    },
+    "bodies": {
+        "type": "String",
+        "property": "P93"
+    },
+    "resultsProtocol": {
+        "type": "String",
+        "property": "P106"
+    },
+    "public": {
+        "type": "String",
+        "property": "P33"
+    },
+    "email": {
+        "type": "String",
+        "property": "P50"
+    },
+    "date": {
+        "type": "String",
+        "property": "P64"
+    },
+    "endDate": {
+        "type": "String",
+        "property": "P70"
+    },
+    "familyName": {
+        "type": "String",
+        "property": "P44"
+    },
+    "accessUrl": {
+        "type": "URL",
+        "property": "P61"
+    },
+    "vendor": {
+        "type": "URL",
+        "property": "P113"
+    },
+    "affix": {
+        "type": "String",
+        "property": "P48"
+    },
+    "result": {
+        "type": "String",
+        "property": "P16"
+    },
+    "contactEmail": {
+        "type": "String",
+        "property": "P80"
+    },
+    "location": {
+        "type": "URL",
+        "property": "P49"
+    },
+    "organization": {
+        "type": "URL",
+        "property": "P73"
+    },
+    "cancelled": {
+        "type": "String",
+        "property": "P104"
+    },
+    "resolutionFile": {
+        "type": "String",
+        "property": "P35"
+    },
+    "title": {
+        "type": "String",
+        "property": "P36"
+    },
+    "relatedPaper": {
+        "type": "String",
+        "property": "P117"
+    },
+    "oparlVersion": {
+        "type": "String",
+        "property": "P111"
+    },
+    "type": {
+        "type": "URL",
+        "property": "P640"
+    },
+    "organizationType": {
+        "type": "String",
+        "property": "P98"
+    },
+    "mainFile": {
+        "type": "String",
+        "property": "P121"
+    },
+    "fileLicense": {
+        "type": "URL",
+        "property": "P65"
+    },
+    "meetings": {
+        "type": "String",
+        "property": "P96"
+    },
+    "web": {
+        "type": "URL",
+        "property": "P19"
+    },
+    "name": {
+        "type": "String",
+        "property": "P18"
+    },
+    "postalCode": {
+        "type": "String",
+        "property": "P95"
+    },
+    "meetingState": {
+        "type": "String",
+        "property": "P108"
+    },
+    "meeting": {
+        "type": "URL",
+        "property": "P24"
+    },
+    "oparlSince": {
+        "type": "String",
+        "property": "P79"
+    },
+    "size": {
+        "type": "String",
+        "property": "P63"
+    },
+    "license": {
+        "type": "String",
+        "property": "P22"
+    },
+    "externalServiceUrl": {
+        "type": "URL",
+        "property": "P62"
+    },
+    "sha1Checksum": {
+        "type": "String",
+        "property": "P67"
+    },
+    "subordinatedPaper": {
+        "type": "String",
+        "property": "P115"
+    },
+    "product": {
+        "type": "URL",
+        "property": "P112"
+    },
+    "masterFile": {
+        "type": "URL",
+        "property": "P57"
+    },
+    "legislativeTerm": {
+        "type": "String",
+        "property": "P77"
+    },
+    "originatorOrganization": {
+        "type": "String",
+        "property": "P119"
+    },
+    "organizations": {
+        "type": "String",
+        "property": "P89"
+    },
+    "subOrganizationOf": {
+        "type": "URL",
+        "property": "P101"
+    },
+    "keyword": {
+        "type": "String",
+        "property": "P14"
+    },
+    "originatorPerson": {
+        "type": "String",
+        "property": "P114"
+    },
+    "number": {
+        "type": "String",
+        "property": "P21"
+    },
+    "papers": {
+        "type": "String",
+        "property": "P97"
+    },
+    "geojson": {
+        "type": "String",
+        "property": "P87"
+    },
+    "gender": {
+        "type": "String",
+        "property": "P37"
+    },
+    "membership": {
+        "type": "String",
+        "property": "P40"
+    },
+    "agendaItem": {
+        "type": "String",
+        "property": "P54"
+    },
+    "invitation": {
+        "type": "String",
+        "property": "P109"
+    }
+}
