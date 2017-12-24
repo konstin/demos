@@ -1,1 +1,13 @@
--e git+git://github.com/konstin/WikidataIntegrator.git@custom_server#egg=wikidataintegrator
+certifi==2017.11.5
+chardet==3.0.4
+idna==2.6
+mwoauth==0.3.2
+oauthlib==2.0.6
+PyJWT==1.5.3
+python-dateutil==2.6.1
+requests==2.18.4
+requests-oauthlib==0.8.0
+simplejson==3.13.2
+six==1.11.0
+urllib3==1.22
+wikidataintegrator==0.0.490

@@ -5,7 +5,7 @@ import os
 from wikidataintegrator import wdi_core, wdi_login
 
 
-def create_properties_mamping(mapping, schemadir, login, server, base_url_template):
+def create_properties_mapping(mapping, schemadir, login, server, base_url_template):
     for schemafile in os.listdir(schemadir):
         with open(os.path.join(schemadir, schemafile)) as f:
             schema = json.load(f)
@@ -46,7 +46,7 @@ def get_properties_mapping_cached(schemadir, login, server, base_url_template):
         print("Could not read existing mmapping, using new one")
         mapping = {}
 
-    mapping = create_properties_mamping(mapping, schemadir, login, server, base_url_template)
+    mapping = create_properties_mapping(mapping, schemadir, login, server, base_url_template)
     with open('mapping.json', "w") as f:
         json.dump(mapping, f, indent=4)
 
@@ -66,6 +66,7 @@ def main():
         server=args.wikibase_server, base_url_template=args.base_url_template)
 
     print(get_properties_mapping_cached(schemadir, login, args.wikibase_server, args.base_url_template))
+
 
 if __name__ == '__main__':
     main()
