@@ -37,7 +37,7 @@ class Wikiparl:
         self.type_mapping = {}
         self.id_mapping = self.load_id_mapping()
         self.missing_links = defaultdict(list)
-        self.suffix = "_altered6"
+        self.suffix = ""
         self.cachedir = cachedir
 
     def load_schema(self, oparl_schema_location):
