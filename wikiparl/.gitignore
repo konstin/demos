@@ -1,0 +1,5 @@
+.venv/
+cache/
+
+id-mapping.json
+type-mapping.json

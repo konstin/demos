@@ -1,0 +1,16 @@
+[[source]]
+
+name = "pypi"
+verify_ssl = true
+url = "https://pypi.python.org/simple"
+
+
+[packages]
+
+wikidataintegrator = "*"
+python-dateutil = "*"
+unidecode = "*"
+
+
+[dev-packages]
+
