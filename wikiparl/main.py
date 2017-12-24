@@ -1,4 +1,20 @@
 #!/usr/bin/env python3
+"""
+Imports the contents of an oparl api into wikidata so we can run sparql queries on it
+
+Setup:
+ - get pipenv (`pip install pipenv`)
+ - `pipenv install`
+ - `pipenv shell
+ - Start a wikibase + sparql stack following https://github.com/wmde/wikibase-docker/blob/master/README-compose.md
+ - Create an account: http://localhost:8181/wiki/Special:CreateAccount
+ - Create a bot and a passsword: http://localhost:8181/wiki/Special:BotPasswords
+
+Usage:
+ - Run ./main.py --help` to list the available options
+ - Run `./main.py` with your options
+"""
+
 import argparse
 import hashlib
 import json
@@ -245,14 +261,16 @@ def main():
     parser.add_argument("--wikibase-server", default="mediawiki.local")
     parser.add_argument("--base-url-template", default="http://{}/api.php")
     parser.add_argument("--oparl_schema_location", default="/home/konsti/oparl/schema")
+    # Wikibase wants a password, wikibase gets a password. I don't care if that password is in git
     parser.add_argument("--cachedir", default="./cache")
+    parser.add_argument("--user", default="Bot1@Bot1")
+    parser.add_argument("--password", default="kft004cr9toivjesd7obnqm16mpr3596")
     args = parser.parse_args()
 
     os.makedirs(args.cachedir, exist_ok=True)
 
     login = wdi_login.WDLogin(
-        # Wikibase wants a password, wikibase gets a password. I don't care if that password is in git
-        user='Konsti@bot', pwd='citsdvh4ct69bqepeiblc8p5njnrq26j',
+        user=args.user, pwd=args.password,
         server=args.wikibase_server, base_url_template=args.base_url_template)
 
     loader = Wikiparl(args.oparl_schema_location, login, args.wikibase_server, args.base_url_template, args.cachedir)
