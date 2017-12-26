@@ -147,7 +147,7 @@ class Wikiparl:
             value = str(value)
             for bad_char in bad_chars:
                 value = value.replace(bad_char, "")
-            value = value.strip()[:390]
+            value = value[:390].strip()
             return WDString(value, prop_nr)
         if wd_type == WDItemID.DTYPE:
             if not self.id_mapping.get(value):
