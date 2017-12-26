@@ -234,7 +234,7 @@ class Wikiparl:
                             wd_type = WDItemID.DTYPE
                         else:
                             wd_type = WDUrl.DTYPE
-                    elif prop_options["format"] == "date-time":
+                    elif prop_options["format"] == "date-time" and prop_options["format"] == "date":
                         wd_type = WDTime.DTYPE
                 # Every object has an explicit url as value for type, but in wikidata this more properly represented
                 # as url
