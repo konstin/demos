@@ -127,6 +127,9 @@ class Wikiparl:
                 value_list = value
 
             for claim_value in value_list:
+                # Skip additional properties that are not in the spec
+                if key not in self.type_mapping:
+                    continue
                 if self.type_mapping[key]["type"] == WDItemID.DTYPE and claim_value not in self.id_mapping:
                     self.missing_links[oparl_object["id"]].append((key, claim_value))
                     continue
@@ -179,6 +182,7 @@ class Wikiparl:
             for list_name in body_lists:
                 for oparl_object in self.yield_list(body[list_name]):
                     self.prepare_and_push(oparl_object)
+                self.save_id_mapping()
 
     def second_pass(self):
         for oparl_object, values in self.missing_links.items():
@@ -193,7 +197,6 @@ class Wikiparl:
             wd_item = WDItemEngine(wd_item_id=wd_item_id, item_name=None, domain="",
                                    data=claims, server=self.server, base_url_template=self.base_url_template)
             wd_item.write(self.login)
-
 
     def load_id_mapping(self):
         if os.path.isfile("id-mapping.json"):
