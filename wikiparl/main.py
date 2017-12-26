@@ -143,7 +143,11 @@ class Wikiparl:
     def create_single_claim(self, value, wd_type, prop_nr) -> Union[WDString, WDItemID, None, WDUrl, WDTime]:
         if wd_type == WDString.DTYPE:
             # Strip away everything wikidata doesn't like
-            value = str(value).replace("\n", "").replace("\t", "").replace("„", "").replace("„", "").replace("“", "").strip()[:390]
+            bad_chars = "\n\t\r„“"
+            value = str(value)
+            for bad_char in bad_chars:
+                value = value.replace(bad_char, "")
+            value = value.strip()[:390]
             return WDString(value, prop_nr)
         if wd_type == WDItemID.DTYPE:
             if not self.id_mapping.get(value):
