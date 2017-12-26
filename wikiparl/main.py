@@ -158,9 +158,8 @@ class Wikiparl:
                 return None
             return WDUrl(str(value), prop_nr)
         elif wd_type == WDTime.DTYPE:
-
             if value == "-0001-11-30T00:00:00+01:00":
-                return WDTime("+01-01-01T00:00:00Z", prop_nr, precision=11)
+                return WDTime("+0001-01-01T00:00:00Z", prop_nr, precision=11)
             value = dateutil.parser.parse(value).strftime("+%Y-%m-%dT00:00:00Z")
             return WDTime(value, prop_nr, precision=11)
         else:
