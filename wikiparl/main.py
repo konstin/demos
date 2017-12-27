@@ -20,6 +20,7 @@ import hashlib
 import json
 import os
 from collections import defaultdict
+from datetime import timezone, datetime
 from typing import Union
 
 import dateutil.parser
@@ -36,6 +37,7 @@ class Wikiparl:
         self.schema = self.load_schema(oparl_schema_location)
         self.type_mapping = {}
         self.id_mapping = self.load_id_mapping()
+        self.list_mapping = self.load_list_mapping()
         self.missing_links = defaultdict(list)
         self.suffix = ""
         self.cachedir = cachedir
@@ -186,9 +188,15 @@ class Wikiparl:
         for body in self.yield_list(system["body"]):
             self.prepare_and_push(body)
             for list_name in body_lists:
+                if body[list_name] in self.list_mapping:
+                    print("SKIPPING {}".format(body[list_name]))
+                    continue
                 for oparl_object in self.yield_list(body[list_name]):
                     self.prepare_and_push(oparl_object)
                 self.save_id_mapping()
+                now = datetime.now(timezone.utc).astimezone()
+                self.list_mapping[body[list_name]] = now.replace(microsecond=0).isoformat()
+                self.save_list_mapping()
 
     def second_pass(self):
         for oparl_object, values in self.missing_links.items():
@@ -222,6 +230,18 @@ class Wikiparl:
         else:
             print("No mapping found, creating a new one")
             self.create_properties_mapping()
+
+    def load_list_mapping(self):
+        if os.path.isfile("list-mapping.json"):
+            with open("list-mapping.json") as fp:
+                return json.load(fp)
+        else:
+            print("No mapping found, creating a new one")
+            return {}
+
+    def save_list_mapping(self):
+        with open("list-mapping.json", "w") as fp:
+            json.dump(self.id_mapping, fp, indent=4)
 
     def create_properties_mapping(self):
         self.add_property("externalList", WDUrl.DTYPE)
