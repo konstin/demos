@@ -36,9 +36,9 @@ class Wikiparl:
         self.login = login
         self.schema = self.load_schema(oparl_schema_location)
         self.type_mapping = {}
-        self.id_mapping = self.load_id_mapping()
-        self.list_mapping = self.load_list_mapping()
-        self.missing_links = defaultdict(list)
+        self.id_mapping = self.load_any("id", {})
+        self.list_mapping = self.load_any("list", {})
+        self.missing_links = defaultdict(list, **self.load_any("missing", {}))
         self.suffix = ""
         self.cachedir = cachedir
 
@@ -174,12 +174,7 @@ class Wikiparl:
 
     def run(self, entrypoint):
         self.first_pass(entrypoint)
-
-        self.save_id_mapping()
-
         self.second_pass()
-
-        self.save_id_mapping()
 
     def first_pass(self, entrypoint):
         body_lists = ["paper", "organization", "person", "meeting"]
@@ -188,15 +183,17 @@ class Wikiparl:
         for body in self.yield_list(system["body"]):
             self.prepare_and_push(body)
             for list_name in body_lists:
-                if body[list_name] in self.list_mapping:
-                    print("SKIPPING {}".format(body[list_name]))
+                current_list = body[list_name]
+                if current_list in self.list_mapping:
+                    print("SKIPPINGLIST {}".format(current_list))
                     continue
-                for oparl_object in self.yield_list(body[list_name]):
+                for oparl_object in self.yield_list(current_list):
                     self.prepare_and_push(oparl_object)
-                self.save_id_mapping()
+                self.save_any("id", self.id_mapping)
                 now = datetime.now(timezone.utc).astimezone()
-                self.list_mapping[body[list_name]] = now.replace(microsecond=0).isoformat()
-                self.save_list_mapping()
+                self.list_mapping[current_list] = now.replace(microsecond=0).isoformat()
+                self.save_any("missing", self.missing_links)
+                self.save_any("list", self.list_mapping)
 
     def second_pass(self):
         for oparl_object, values in self.missing_links.items():
@@ -211,17 +208,7 @@ class Wikiparl:
             wd_item = WDItemEngine(wd_item_id=wd_item_id, item_name=None, domain="",
                                    data=claims, server=self.server, base_url_template=self.base_url_template)
             wd_item.write(self.login)
-
-    def load_id_mapping(self):
-        if os.path.isfile("id-mapping.json"):
-            with open("id-mapping.json") as fp:
-                return json.load(fp)
-        else:
-            return {}
-
-    def save_id_mapping(self):
-        with open("id-mapping.json", "w") as fp:
-            json.dump(self.id_mapping, fp, indent=4)
+        self.save_any("id", self.id_mapping)
 
     def load_type_mapping(self):
         if os.path.isfile("type-mapping.json"):
@@ -231,17 +218,17 @@ class Wikiparl:
             print("No mapping found, creating a new one")
             self.create_properties_mapping()
 
-    def load_list_mapping(self):
-        if os.path.isfile("list-mapping.json"):
-            with open("list-mapping.json") as fp:
+    def load_any(self, name, default):
+        if os.path.isfile(name + "-mapping.json"):
+            with open(name + "-mapping.json") as fp:
                 return json.load(fp)
         else:
-            print("No mapping found, creating a new one")
-            return {}
+            print("No {} mapping found, creating a new one".format(name))
+            return default
 
-    def save_list_mapping(self):
-        with open("list-mapping.json", "w") as fp:
-            json.dump(self.id_mapping, fp, indent=4)
+    def save_any(self, name, data):
+        with open(name + "-mapping.json", "w") as fp:
+            json.dump(data, fp, indent=4)
 
     def create_properties_mapping(self):
         self.add_property("externalList", WDUrl.DTYPE)
